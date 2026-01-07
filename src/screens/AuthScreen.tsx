@@ -16,6 +16,7 @@ import { Colors } from '../constants/colors';
 import { Button } from '../components/Button';
 import type { AuthSession } from '../types';
 import { api } from '../services/api';
+import { googleSignIn, microsoftSignIn, isGoogleSignInAvailable, isMicrosoftSignInAvailable } from '../services/oauth';
 
 type AuthMode = 'login' | 'signup';
 
@@ -76,8 +77,60 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSignedIn }) => {
   const oauthComingSoon = (provider: 'Google' | 'Microsoft') => {
     Alert.alert(
       `${provider} sign-in`,
-      `UI is ready, but OAuth flow isn't wired in the mobile app yet. For now, use email/password signup/login.`
+      `OAuth is not yet configured. See src/services/oauth.ts for setup instructions.`
     );
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (!isGoogleSignInAvailable()) {
+      oauthComingSoon('Google');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { idToken } = await googleSignIn();
+      const result = await api.auth.oauthGoogle({ idToken });
+      
+      onSignedIn({
+        mode: 'signed-in',
+        userId: result.user.id,
+        email: result.user.email,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      });
+    } catch (err: any) {
+      const message = typeof err?.message === 'string' ? err.message : 'Google sign-in failed.';
+      Alert.alert('Sign-in failed', message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleMicrosoftSignIn = async () => {
+    if (!isMicrosoftSignInAvailable()) {
+      oauthComingSoon('Microsoft');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const { idToken } = await microsoftSignIn();
+      const result = await api.auth.oauthMicrosoft({ idToken });
+      
+      onSignedIn({
+        mode: 'signed-in',
+        userId: result.user.id,
+        email: result.user.email,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+      });
+    } catch (err: any) {
+      const message = typeof err?.message === 'string' ? err.message : 'Microsoft sign-in failed.';
+      Alert.alert('Sign-in failed', message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -218,11 +271,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSignedIn }) => {
               <View style={styles.dividerLine} />
             </View>
 
-            <Button variant="outline" onPress={() => oauthComingSoon('Google')} fullWidth icon="logo-google">
+            <Button variant="outline" onPress={handleGoogleSignIn} fullWidth icon="logo-google">
               Google
             </Button>
             <View style={{ height: 10 }} />
-            <Button variant="outline" onPress={() => oauthComingSoon('Microsoft')} fullWidth icon="logo-microsoft">
+            <Button variant="outline" onPress={handleMicrosoftSignIn} fullWidth icon="logo-microsoft">
               Microsoft
             </Button>
 

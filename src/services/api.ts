@@ -143,6 +143,23 @@ export const authApi = {
       body: JSON.stringify({ refreshToken: token }),
     });
   },
+
+  requestEmailVerification: async () => {
+    return request<{ message: string; token?: string }>('/email-verification/request-verification', {
+      method: 'POST',
+    });
+  },
+
+  verifyEmail: async (token: string) => {
+    return request<{ success: boolean; message: string }>('/email-verification/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+  },
+
+  getVerificationStatus: async () => {
+    return request<{ emailVerified: boolean; hasEmail: boolean }>('/email-verification/verification-status');
+  },
 };
 
 /**

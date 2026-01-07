@@ -90,8 +90,23 @@ See [docs/deployment.md](docs/deployment.md) for production setup.
 
 - [Architecture](docs/architecture.md) - Technical overview
 - [Features](docs/features.md) - Feature documentation
+- [Authentication](docs/auth-complete.md) - Complete auth system documentation
+- [Auth Setup Guide](docs/auth-setup.md) - Step-by-step setup instructions
 - [Deployment](docs/deployment.md) - Production deployment guide
 - [Roadmap](docs/roadmap.md) - Future improvements
+
+## Authentication
+
+✅ **Complete authentication system implemented!**
+
+- Email/Password authentication
+- JWT access & refresh tokens
+- OAuth ready (Google & Microsoft)
+- Automatic token refresh
+- Email verification support
+- Secure logout
+
+See [docs/auth-complete.md](docs/auth-complete.md) for full details and [docs/auth-setup.md](docs/auth-setup.md) for setup instructions.
 
 ## Tech Stack
 
@@ -104,3 +119,4 @@ See [docs/deployment.md](docs/deployment.md) for production setup.
 ## License
 
 MIT
+.

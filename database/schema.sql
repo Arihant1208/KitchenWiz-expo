@@ -55,6 +55,16 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Email verification tokens
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id)
+);
+
 -- Inventory Items Table
 CREATE TABLE IF NOT EXISTS inventory_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -123,6 +133,8 @@ CREATE INDEX IF NOT EXISTS idx_identities_user ON user_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_identities_provider_sub ON user_identities(provider, provider_sub);
 CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_expires ON refresh_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_verification_token ON email_verification_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_verification_user ON email_verification_tokens(user_id);
 
 -- Insert default user (for development/demo)
 INSERT INTO users (id, name, dietary_restrictions, allergies, cuisine_preferences, goals, cooking_skill, household_size, max_cooking_time)

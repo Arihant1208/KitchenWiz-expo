@@ -17,6 +17,7 @@ import { Ingredient, UserProfile, MealPlanDay, Recipe, ShoppingItem, AuthSession
 import { storage } from './src/services/storage';
 import { CustomTabBar } from './src/components/CustomTabBar';
 import { authTokenStore } from './src/services/api';
+import { useAuthRefresh } from './src/services/useAuthRefresh';
 import { Colors } from './src/constants/colors';
 
 const Tab = createBottomTabNavigator();
@@ -41,6 +42,27 @@ export default function App() {
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [authSession, setAuthSession] = useState<AuthSession>({ mode: 'guest' });
+
+  // Set up automatic token refresh
+  useAuthRefresh({
+    accessToken: authSession.mode === 'signed-in' ? authSession.accessToken : undefined,
+    refreshToken: authSession.mode === 'signed-in' ? authSession.refreshToken : undefined,
+    onTokenRefreshed: (tokens) => {
+      // Update session with new tokens
+      if (authSession.mode === 'signed-in') {
+        setAuthSession({
+          ...authSession,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        });
+      }
+    },
+    onAuthError: () => {
+      // Token refresh failed - sign out user
+      console.warn('Token refresh failed, signing out');
+      setAuthSession({ mode: 'guest' });
+    },
+  });
 
   useEffect(() => {
     const loadAuth = async () => {
