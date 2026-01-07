@@ -14,7 +14,7 @@ function generateVerificationToken(): string {
  * Generates a verification token and stores it in the database
  * In production, this should send an email with the verification link
  */
-router.post('/request-verification', requireAuth, async (req: Request, res: Response) => {
+router.post('/request-verification', requireAuth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -66,7 +66,7 @@ router.post('/request-verification', requireAuth, async (req: Request, res: Resp
 /**
  * Verify email with token
  */
-router.post('/verify-email', async (req: Request, res: Response) => {
+router.post('/verify-email', async (req: any, res: Response) => {
   const { token } = req.body || {};
   
   if (!token) {
@@ -111,7 +111,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 /**
  * Check verification status
  */
-router.get('/verification-status', requireAuth, async (req: Request, res: Response) => {
+router.get('/verification-status', requireAuth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {

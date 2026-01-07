@@ -4,7 +4,7 @@ import { query } from '../db';
 const router = Router();
 
 // Get Inventory
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -29,7 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Add single item to inventory
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: any, res: Response) => {
   const { name, quantity, category, expiryDate, caloriesPerUnit } = req.body;
   
   try {
@@ -57,7 +57,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // Update inventory item
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: any, res: Response) => {
   const { id } = req.params;
   const { name, quantity, category, expiryDate, caloriesPerUnit } = req.body;
   
@@ -92,7 +92,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // Delete inventory item
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: any, res: Response) => {
   const { id } = req.params;
   
   try {
@@ -108,7 +108,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // Sync/Replace Inventory (Bulk operation)
-router.post('/sync', async (req: Request, res: Response) => {
+router.post('/sync', async (req: any, res: Response) => {
   const items = req.body?.items;
   
   try {

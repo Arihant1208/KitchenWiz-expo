@@ -91,13 +91,19 @@ cd backend
 cp .env.example .env
 # Edit .env and set JWT_SECRET (use crypto.randomBytes(32).toString('hex'))
 
+# For Neon or cloud PostgreSQL:
+# Add your DATABASE_URL to .env
+# DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+
 # Install dependencies
 npm install
 
-# Create database
-createdb kitchenwiz
+# Initialize database
+# Option 1: Using the setup script (works for both local and cloud)
+node scripts/setup-db.js
 
-# Initialize schema
+# Option 2: Using psql (for local PostgreSQL only)
+createdb kitchenwiz
 psql -U postgres -d kitchenwiz -f ../database/schema.sql
 
 # Start server

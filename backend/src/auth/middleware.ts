@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express';
 import { verifyAccessToken } from './tokens';
 
-export const requireAuth: RequestHandler = async (req, res, next) => {
+export const requireAuth: RequestHandler = async (req: any, res, next) => {
   try {
     const header = req.headers.authorization;
     if (!header || !header.toLowerCase().startsWith('bearer ')) {

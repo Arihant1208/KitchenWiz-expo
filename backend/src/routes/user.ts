@@ -4,7 +4,7 @@ import { query } from '../db';
 const router = Router();
 
 // Get User Profile
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -30,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Update User Profile
-router.put('/', async (req: Request, res: Response) => {
+router.put('/', async (req: any, res: Response) => {
   const { 
     name, 
     dietaryRestrictions, 

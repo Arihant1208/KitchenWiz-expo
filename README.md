@@ -76,15 +76,31 @@ EXPO_PUBLIC_API_URL=http://localhost:3000/api
 
 ## Backend Setup (Optional)
 
-The app works offline using local storage. For cloud sync:
+The app works offline using local storage. For cloud sync and authentication:
 
 ```bash
 cd backend
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your database credentials and JWT secret
+
+# Install dependencies
 npm install
+
+# Set up database (works for both local and cloud PostgreSQL)
+node scripts/setup-db.js
+
+# Start server
 npm run dev
 ```
 
-See [docs/deployment.md](docs/deployment.md) for production setup.
+**Database Options:**
+- **Neon PostgreSQL** (Recommended): Serverless PostgreSQL with generous free tier
+- **Local PostgreSQL**: Traditional self-hosted database
+- **AWS RDS, Azure Database, etc.**: Any PostgreSQL-compatible service
+
+See [docs/auth-setup.md](docs/auth-setup.md) for detailed setup instructions.
 
 ## Documentation
 

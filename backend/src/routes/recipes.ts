@@ -4,7 +4,7 @@ import { query } from '../db';
 const router = Router();
 
 // Get All Discovered Recipes
-router.get('/discovered', async (req: Request, res: Response) => {
+router.get('/discovered', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -21,7 +21,7 @@ router.get('/discovered', async (req: Request, res: Response) => {
 });
 
 // Get Saved Recipes
-router.get('/saved', async (req: Request, res: Response) => {
+router.get('/saved', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -38,7 +38,7 @@ router.get('/saved', async (req: Request, res: Response) => {
 });
 
 // Sync discovered recipes
-router.post('/discovered', async (req: Request, res: Response) => {
+router.post('/discovered', async (req: any, res: Response) => {
   const recipes = req.body?.recipes;
   
   try {
@@ -63,7 +63,7 @@ router.post('/discovered', async (req: Request, res: Response) => {
 });
 
 // Sync saved recipes
-router.post('/saved', async (req: Request, res: Response) => {
+router.post('/saved', async (req: any, res: Response) => {
   const recipes = req.body?.recipes;
   
   try {
@@ -88,7 +88,7 @@ router.post('/saved', async (req: Request, res: Response) => {
 });
 
 // Save a single recipe
-router.post('/:id/save', async (req: Request, res: Response) => {
+router.post('/:id/save', async (req: any, res: Response) => {
   const { id } = req.params;
   
   try {
@@ -112,7 +112,7 @@ router.post('/:id/save', async (req: Request, res: Response) => {
 });
 
 // Unsave a recipe
-router.post('/:id/unsave', async (req: Request, res: Response) => {
+router.post('/:id/unsave', async (req: any, res: Response) => {
   const { id } = req.params;
   
   try {

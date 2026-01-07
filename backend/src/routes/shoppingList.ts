@@ -4,7 +4,7 @@ import { query } from '../db';
 const router = Router();
 
 // Get Shopping List
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -30,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Add item to shopping list
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: any, res: Response) => {
   const { name, quantity, category } = req.body;
   
   try {
@@ -58,7 +58,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // Clear checked items (must be before '/:id' delete route)
-router.delete('/checked', async (req: Request, res: Response) => {
+router.delete('/checked', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -75,7 +75,7 @@ router.delete('/checked', async (req: Request, res: Response) => {
 });
 
 // Toggle item checked status
-router.post('/:id/toggle', async (req: Request, res: Response) => {
+router.post('/:id/toggle', async (req: any, res: Response) => {
   const { id } = req.params;
   
   try {
@@ -108,7 +108,7 @@ router.post('/:id/toggle', async (req: Request, res: Response) => {
 });
 
 // Update item
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', async (req: any, res: Response) => {
   const { id } = req.params;
   const { name, quantity, category, checked } = req.body;
 
@@ -146,7 +146,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // Delete item
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', async (req: any, res: Response) => {
   const { id } = req.params;
   
   try {
@@ -162,7 +162,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // Sync shopping list
-router.post('/sync', async (req: Request, res: Response) => {
+router.post('/sync', async (req: any, res: Response) => {
   const list = req.body?.items;
   
   try {
@@ -191,7 +191,7 @@ router.post('/sync', async (req: Request, res: Response) => {
 });
 
 // Move checked items to inventory
-router.post('/move-to-inventory', async (req: Request, res: Response) => {
+router.post('/move-to-inventory', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });

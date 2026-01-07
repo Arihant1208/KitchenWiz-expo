@@ -46,7 +46,7 @@ async function findUserByEmail(email: string) {
   return result.rows[0] || null;
 }
 
-router.post('/signup', async (req: Request, res: Response) => {
+router.post('/signup', async (req: any, res: Response) => {
   const { email, password, name } = req.body || {};
 
   if (!email || !password) {
@@ -94,7 +94,7 @@ router.post('/signup', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', async (req: any, res: Response) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password required' });
@@ -135,7 +135,7 @@ async function verifyProviderToken(provider: AuthProvider, idToken: string) {
   throw new Error('Unsupported provider');
 }
 
-router.post('/oauth/:provider', async (req: Request, res: Response) => {
+router.post('/oauth/:provider', async (req: any, res: Response) => {
   const provider = String(req.params.provider) as AuthProvider;
   const { idToken } = req.body || {};
 
@@ -216,7 +216,7 @@ router.post('/oauth/:provider', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/link', requireAuth, async (req: Request, res: Response) => {
+router.post('/link', requireAuth, async (req: any, res: Response) => {
   const { provider, idToken } = req.body || {};
   if (!provider || !idToken) {
     return res.status(400).json({ message: 'provider and idToken required' });
@@ -257,7 +257,7 @@ router.post('/link', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/refresh', async (req: Request, res: Response) => {
+router.post('/refresh', async (req: any, res: Response) => {
   const { refreshToken } = req.body || {};
   if (!refreshToken) {
     return res.status(400).json({ message: 'refreshToken required' });
@@ -320,7 +320,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/logout', async (req: Request, res: Response) => {
+router.post('/logout', async (req: any, res: Response) => {
   const { refreshToken } = req.body || {};
   if (!refreshToken) {
     return res.status(400).json({ message: 'refreshToken required' });

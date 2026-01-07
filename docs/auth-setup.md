@@ -16,6 +16,17 @@ Edit `backend/.env` with your configuration:
 
 #### Required Variables
 ```env
+# Database Configuration
+# Option 1: Connection string (for Neon, AWS RDS, etc.)
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+
+# Option 2: Individual parameters (for local PostgreSQL)
+DB_HOST=localhost
+DB_USER=postgres
+DB_PASSWORD=postgres
+DB_NAME=kitchenwiz
+DB_PORT=5432
+
 # JWT Configuration - REQUIRED
 JWT_SECRET=your_random_secret_key_min_32_chars_long_change_this_in_production
 JWT_ISSUER=kitchenwiz
@@ -43,6 +54,24 @@ MICROSOFT_TENANT_ID=common
 
 ### 2. Database Setup
 
+#### Option A: Using Neon PostgreSQL (Recommended)
+
+If you're using a cloud PostgreSQL instance like Neon:
+
+1. Get your connection string from your provider
+2. Add it to `backend/.env`:
+   ```env
+   DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+   ```
+
+3. Run the setup script:
+   ```bash
+   cd backend
+   node scripts/setup-db.js
+   ```
+
+#### Option B: Local PostgreSQL
+
 Make sure PostgreSQL is running, then create and initialize the database:
 
 ```bash
@@ -54,8 +83,12 @@ psql -U postgres
 CREATE DATABASE kitchenwiz;
 \q
 
-# Initialize schema
+# Initialize schema (Option 1: Using psql)
 psql -U postgres -d kitchenwiz -f ../database/schema.sql
+
+# Initialize schema (Option 2: Using setup script)
+cd backend
+node scripts/setup-db.js
 ```
 
 ### 3. Install Dependencies

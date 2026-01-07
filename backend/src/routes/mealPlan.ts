@@ -4,7 +4,7 @@ import { query } from '../db';
 const router = Router();
 
 // Get Meal Plan
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
@@ -29,7 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Sync Meal Plan
-router.post('/sync', async (req: Request, res: Response) => {
+router.post('/sync', async (req: any, res: Response) => {
   const plan = req.body?.mealPlan; // Array of MealPlanDay
   
   try {
@@ -64,7 +64,7 @@ router.post('/sync', async (req: Request, res: Response) => {
 });
 
 // Update single day
-router.put('/:day', async (req: Request, res: Response) => {
+router.put('/:day', async (req: any, res: Response) => {
   const { day } = req.params;
   const { breakfast, lunch, dinner } = req.body;
   
@@ -109,7 +109,7 @@ router.put('/:day', async (req: Request, res: Response) => {
 });
 
 // Clear meal plan
-router.delete('/', async (req: Request, res: Response) => {
+router.delete('/', async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
