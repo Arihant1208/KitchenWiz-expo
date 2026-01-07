@@ -27,7 +27,7 @@ export const useAuthRefresh = ({
   onTokenRefreshed,
   onAuthError,
 }: UseAuthRefreshOptions) => {
-  const refreshTimerRef = useRef<NodeJS.Timeout>();
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!accessToken || !refreshToken) {

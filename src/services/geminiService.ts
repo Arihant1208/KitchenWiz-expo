@@ -116,11 +116,32 @@ export const generateWeeklyMealPlan = async (user: UserProfile, inventory: Ingre
     Available Ingredients: ${inventoryList || 'None specified'}.
     Prioritize using available ingredients to reduce waste.
     
+    For each meal, provide a complete recipe with ingredients and instructions.
+    
     Return ONLY a valid JSON array with 7 objects containing:
     - day (string: Monday, Tuesday, etc.)
-    - breakfast (object with: id, title, calories, prepTime, cookTime)
-    - lunch (object with: id, title, calories, prepTime, cookTime)
-    - dinner (object with: id, title, calories, prepTime, cookTime)
+    - breakfast (object with: id, title, description, ingredients (array of objects with name and amount, e.g. [{"name": "eggs", "amount": "2"}, {"name": "bread", "amount": "2 slices"}]), instructions (array of strings, e.g. ["Crack eggs into a bowl", "Heat pan and cook eggs"]), prepTime (number in minutes), cookTime (number in minutes), calories (number))
+    - lunch (same full recipe object)
+    - dinner (same full recipe object)
+    
+    Example structure:
+    [
+      {
+        "day": "Monday",
+        "breakfast": {
+          "id": "1",
+          "title": "Scrambled Eggs",
+          "description": "Simple scrambled eggs with toast",
+          "ingredients": [{"name": "eggs", "amount": "2"}, {"name": "bread", "amount": "2 slices"}],
+          "instructions": ["Crack eggs into bowl", "Whisk eggs", "Heat pan", "Cook eggs"],
+          "prepTime": 5,
+          "cookTime": 10,
+          "calories": 300
+        },
+        "lunch": {...},
+        "dinner": {...}
+      }
+    ]
   `;
 
   try {

@@ -4,11 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
+  Image,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { Ingredient, MealPlanDay, UserProfile } from '../types';
+import { Ingredient, MealPlanDay, UserProfile, Recipe } from '../types';
 import { Button } from '../components/Button';
 import { generateWeeklyMealPlan } from '../services/geminiService';
 
@@ -26,6 +28,7 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
   setMealPlan,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState<Recipe | null>(null);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -53,8 +56,8 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
     );
   };
 
-  const MealCard = ({ meal, type }: { meal?: { title?: string; calories?: number; prepTime?: number; cookTime?: number }; type: string }) => (
-    <View style={styles.mealCard}>
+  const MealCard = ({ meal, type, onPress }: { meal?: Recipe; type: string; onPress?: () => void }) => (
+    <TouchableOpacity style={styles.mealCard} onPress={onPress} disabled={!meal}>
       <View style={styles.mealHeader}>
         <Ionicons
           name={type === 'breakfast' ? 'sunny-outline' : type === 'lunch' ? 'partly-sunny-outline' : 'moon-outline'}
@@ -78,8 +81,77 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
       ) : (
         <Text style={styles.noMeal}>No meal planned</Text>
       )}
-    </View>
+    </TouchableOpacity>
   );
+
+  // Recipe Detail View
+  if (selectedMeal) {
+    return (
+      <ScrollView style={styles.container}>
+        <TouchableOpacity style={styles.backButton} onPress={() => setSelectedMeal(null)}>
+          <Ionicons name="arrow-back" size={20} color={Colors.primary} />
+          <Text style={styles.backText}>Back to Planner</Text>
+        </TouchableOpacity>
+
+        <View style={styles.detailCard}>
+          <Image
+            source={{ uri: `https://picsum.photos/seed/${selectedMeal.id}/800/400` }}
+            style={styles.detailImage}
+          />
+
+          <View style={styles.detailContent}>
+            <Text style={styles.detailTitle}>{selectedMeal.title}</Text>
+
+            <View style={styles.detailMeta}>
+              <View style={styles.metaItem}>
+                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.metaText}>
+                  {(selectedMeal.prepTime || 0) + (selectedMeal.cookTime || 0) || 30}m
+                </Text>
+              </View>
+              <View style={styles.metaItem}>
+                <Ionicons name="flame-outline" size={16} color={Colors.textSecondary} />
+                <Text style={styles.metaText}>{selectedMeal.calories || 400} kcal</Text>
+              </View>
+            </View>
+
+            {selectedMeal.description && (
+              <Text style={styles.detailDescription}>{selectedMeal.description}</Text>
+            )}
+
+            {selectedMeal.ingredients && selectedMeal.ingredients.length > 0 && (
+              <View style={styles.ingredientsCard}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
+                  <Text style={styles.sectionTitle}>Ingredients</Text>
+                </View>
+                {selectedMeal.ingredients.map((ing, idx) => (
+                  <View key={idx} style={styles.ingredientRow}>
+                    <Text style={styles.ingredientName}>{ing.name}</Text>
+                    <Text style={styles.ingredientAmount}>{ing.amount}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {selectedMeal.instructions && selectedMeal.instructions.length > 0 && (
+              <View style={styles.instructionsSection}>
+                <Text style={styles.sectionTitle}>Instructions</Text>
+                {selectedMeal.instructions.map((step, idx) => (
+                  <View key={idx} style={styles.instructionRow}>
+                    <View style={styles.stepNumber}>
+                      <Text style={styles.stepNumberText}>{idx + 1}</Text>
+                    </View>
+                    <Text style={styles.instructionText}>{step}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -117,9 +189,9 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
               </View>
               
               <View style={styles.mealsContainer}>
-                <MealCard meal={day.breakfast} type="breakfast" />
-                <MealCard meal={day.lunch} type="lunch" />
-                <MealCard meal={day.dinner} type="dinner" />
+                <MealCard meal={day.breakfast} type="breakfast" onPress={() => day.breakfast && setSelectedMeal(day.breakfast)} />
+                <MealCard meal={day.lunch} type="lunch" onPress={() => day.lunch && setSelectedMeal(day.lunch)} />
+                <MealCard meal={day.dinner} type="dinner" onPress={() => day.dinner && setSelectedMeal(day.dinner)} />
               </View>
             </View>
           ))}
@@ -259,5 +331,140 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
     fontStyle: 'italic',
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  detailCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    margin: 20,
+    marginTop: 0,
+    overflow: 'hidden',
+    ...Colors.shadow.medium,
+  },
+  detailImage: {
+    width: '100%',
+    height: 200,
+  },
+  detailBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  detailBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textInverse,
+  },
+  detailContent: {
+    padding: 24,
+  },
+  detailTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 14,
+    letterSpacing: -0.3,
+  },
+  detailMeta: {
+    flexDirection: 'row',
+    gap: 20,
+    marginBottom: 18,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.borderLight,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  metaText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  detailDescription: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  ingredientsCard: {
+    backgroundColor: Colors.primaryLight,
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  ingredientName: {
+    fontSize: 15,
+    color: Colors.primaryDark,
+    fontWeight: '500',
+  },
+  ingredientAmount: {
+    fontSize: 15,
+    color: Colors.primaryDark,
+    opacity: 0.7,
+  },
+  instructionsSection: {
+    marginTop: 8,
+  },
+  instructionRow: {
+    flexDirection: 'row',
+    gap: 14,
+    marginBottom: 20,
+  },
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNumberText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textInverse,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.textSecondary,
+    lineHeight: 24,
   },
 });
