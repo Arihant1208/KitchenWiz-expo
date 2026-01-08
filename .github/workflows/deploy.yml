@@ -58,12 +58,12 @@ jobs:
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Render deploy hook (optional)
+      - name: Trigger Vercel deploy hook (optional)
         env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
-            echo "RENDER_DEPLOY_HOOK is not set; skipping backend deploy."
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK is not set; skipping backend deploy."
             exit 0
           fi
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
+          curl -fsSL -X POST "$VERCEL_DEPLOY_HOOK"
