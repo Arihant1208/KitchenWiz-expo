@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -10,14 +10,17 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { Colors } from '../constants/colors';
-import { Ingredient, ShoppingItem, MealPlanDay } from '../types';
-import { Button } from '../components/Button';
-import { parseReceiptImage, generateShoppingList } from '../services/geminiService';
-import { api } from '../services/api';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { Colors } from "../constants/colors";
+import { Ingredient, ShoppingItem, MealPlanDay } from "../types";
+import { Button } from "../components/Button";
+import {
+  parseReceiptImage,
+  generateShoppingList,
+} from "../services/geminiService";
+import { api } from "../services/api";
 
 interface InventoryScreenProps {
   items: Ingredient[];
@@ -34,17 +37,17 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   setShoppingList,
   mealPlan,
 }) => {
-  const [activeTab, setActiveTab] = useState<'stock' | 'shopping'>('stock');
+  const [activeTab, setActiveTab] = useState<"stock" | "shopping">("stock");
   const [isScanning, setIsScanning] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [editingItem, setEditingItem] = useState<Ingredient | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState<Partial<Ingredient>>({
-    name: '',
-    quantity: '',
-    category: 'other',
-    expiryDate: new Date().toISOString().split('T')[0],
+    name: "",
+    quantity: "",
+    category: "other",
+    expiryDate: new Date().toISOString().split("T")[0],
   });
 
   // --- Stock Logic ---
@@ -59,32 +62,37 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
       if (!result.canceled && result.assets[0].base64) {
         setIsScanning(true);
-        const mimeType = result.assets[0].mimeType || 'image/jpeg';
-        const newItems = await parseReceiptImage(result.assets[0].base64, mimeType);
+        const mimeType = result.assets[0].mimeType || "image/jpeg";
+        const newItems = await parseReceiptImage(
+          result.assets[0].base64,
+          mimeType
+        );
 
-        const created = await Promise.all(newItems.map(item => api.inventory.add(item)));
-        setItems(prev => [...prev, ...created]);
-        Alert.alert('Success', `Added ${created.length} items from receipt!`);
+        const created = await Promise.all(
+          newItems.map((item) => api.inventory.add(item))
+        );
+        setItems((prev) => [...prev, ...created]);
+        Alert.alert("Success", `Added ${created.length} items from receipt!`);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to scan receipt. Please try again.');
+      Alert.alert("Error", "Failed to scan receipt. Please try again.");
     } finally {
       setIsScanning(false);
     }
   };
 
   const removeItem = (id: string) => {
-    Alert.alert('Remove Item', 'Are you sure you want to remove this item?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Remove Item", "Are you sure you want to remove this item?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Remove',
-        style: 'destructive',
+        text: "Remove",
+        style: "destructive",
         onPress: async () => {
           try {
             await api.inventory.delete(id);
-            setItems(prev => prev.filter(i => i.id !== id));
+            setItems((prev) => prev.filter((i) => i.id !== id));
           } catch {
-            Alert.alert('Error', 'Failed to remove item.');
+            Alert.alert("Error", "Failed to remove item.");
           }
         },
       },
@@ -101,31 +109,37 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         expiryDate: editingItem.expiryDate,
         caloriesPerUnit: editingItem.caloriesPerUnit,
       });
-      setItems(prev => prev.map(i => (i.id === updated.id ? updated : i)));
+      setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
       setEditingItem(null);
     } catch {
-      Alert.alert('Error', 'Failed to save changes.');
+      Alert.alert("Error", "Failed to save changes.");
     }
   };
 
   const addNewItem = async () => {
     if (!newItem.name || !newItem.quantity) {
-      Alert.alert('Error', 'Please fill in name and quantity');
+      Alert.alert("Error", "Please fill in name and quantity");
       return;
     }
     try {
       const created = await api.inventory.add({
-        id: 'temp',
+        id: "temp",
         name: newItem.name,
         quantity: newItem.quantity,
-        category: newItem.category as Ingredient['category'],
-        expiryDate: newItem.expiryDate || new Date().toISOString().split('T')[0],
+        category: newItem.category as Ingredient["category"],
+        expiryDate:
+          newItem.expiryDate || new Date().toISOString().split("T")[0],
       });
-      setItems(prev => [...prev, created]);
-      setNewItem({ name: '', quantity: '', category: 'other', expiryDate: new Date().toISOString().split('T')[0] });
+      setItems((prev) => [...prev, created]);
+      setNewItem({
+        name: "",
+        quantity: "",
+        category: "other",
+        expiryDate: new Date().toISOString().split("T")[0],
+      });
       setShowAddModal(false);
     } catch {
-      Alert.alert('Error', 'Failed to add item.');
+      Alert.alert("Error", "Failed to add item.");
     }
   };
 
@@ -134,50 +148,83 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     return Math.ceil(diff / (1000 * 3600 * 24));
   };
 
-  const filteredItems = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredItems = items.filter((i) =>
+    i.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const getCategoryStyle = (cat: string) => {
-    return Colors.categories[cat as keyof typeof Colors.categories] || Colors.categories.other;
+    return (
+      Colors.categories[cat as keyof typeof Colors.categories] ||
+      Colors.categories.other
+    );
   };
 
-  const getCategoryIconName = (category: Ingredient['category']): keyof typeof Ionicons.glyphMap => {
+  const getCategoryIconName = (
+    category: Ingredient["category"]
+  ): keyof typeof Ionicons.glyphMap => {
     switch (category) {
-      case 'produce':
-        return 'leaf-outline';
-      case 'dairy':
-        return 'cafe-outline';
-      case 'meat':
-        return 'restaurant-outline';
-      case 'pantry':
-        return 'archive-outline';
-      case 'frozen':
-        return 'snow-outline';
+      case "produce":
+        return "leaf-outline";
+      case "dairy":
+        return "cafe-outline";
+      case "meat":
+        return "restaurant-outline";
+      case "pantry":
+        return "archive-outline";
+      case "frozen":
+        return "snow-outline";
       default:
-        return 'pricetag-outline';
+        return "pricetag-outline";
     }
   };
 
   const formatShortDate = (dateStr: string) => {
     const date = new Date(dateStr);
     if (Number.isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
   };
 
-  const getIngredientBadges = (ingredient: Ingredient, daysUntilExpiry: number) => {
-    const badges: Array<{ label: string; icon: keyof typeof Ionicons.glyphMap; bg: string; color: string }> = [];
+  const getIngredientBadges = (
+    ingredient: Ingredient,
+    daysUntilExpiry: number
+  ) => {
+    const badges: Array<{
+      label: string;
+      icon: keyof typeof Ionicons.glyphMap;
+      bg: string;
+      color: string;
+    }> = [];
 
     if (daysUntilExpiry < 0) {
-      badges.push({ label: 'Expired', icon: 'alert-circle-outline', bg: Colors.errorLight, color: Colors.error });
+      badges.push({
+        label: "Expired",
+        icon: "alert-circle-outline",
+        bg: Colors.errorLight,
+        color: Colors.error,
+      });
     } else if (daysUntilExpiry === 0) {
-      badges.push({ label: 'Expires today', icon: 'time-outline', bg: Colors.warningLight, color: Colors.warning });
+      badges.push({
+        label: "Expires today",
+        icon: "time-outline",
+        bg: Colors.warningLight,
+        color: Colors.warning,
+      });
     } else if (daysUntilExpiry <= 3) {
-      badges.push({ label: 'Expiring soon', icon: 'warning-outline', bg: Colors.warningLight, color: Colors.warning });
+      badges.push({
+        label: "Expiring soon",
+        icon: "warning-outline",
+        bg: Colors.warningLight,
+        color: Colors.warning,
+      });
     }
 
-    if (typeof ingredient.caloriesPerUnit === 'number') {
+    if (typeof ingredient.caloriesPerUnit === "number") {
       badges.push({
         label: `${ingredient.caloriesPerUnit} cal/unit`,
-        icon: 'flame-outline',
+        icon: "flame-outline",
         bg: Colors.infoLight,
         color: Colors.info,
       });
@@ -189,48 +236,58 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   // --- Shopping List Logic ---
   const handleGenerateShoppingList = async () => {
     if (mealPlan.length === 0) {
-      Alert.alert('No Meal Plan', 'Please generate a meal plan first!');
+      Alert.alert("No Meal Plan", "Please generate a meal plan first!");
       return;
     }
     setIsGenerating(true);
     try {
       const newList = await generateShoppingList(items, mealPlan);
-      const created = await Promise.all(newList.map(item => api.shoppingList.add(item)));
-      setShoppingList(prev => [...prev, ...created]);
-      Alert.alert('Success', `Added ${created.length} items to shopping list!`);
+      const created = await Promise.all(
+        newList.map((item) => api.shoppingList.add(item))
+      );
+      setShoppingList((prev) => [...prev, ...created]);
+      Alert.alert("Success", `Added ${created.length} items to shopping list!`);
     } catch (e) {
-      Alert.alert('Error', 'Failed to generate list');
+      Alert.alert("Error", "Failed to generate list");
     } finally {
       setIsGenerating(false);
     }
   };
 
   const toggleCheck = async (id: string) => {
-    setShoppingList(prev => prev.map(item => (item.id === id ? { ...item, checked: !item.checked } : item)));
+    setShoppingList((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, checked: !item.checked } : item
+      )
+    );
     try {
       await api.shoppingList.toggleChecked(id);
     } catch {
       // Revert on failure.
-      setShoppingList(prev => prev.map(item => (item.id === id ? { ...item, checked: !item.checked } : item)));
-      Alert.alert('Error', 'Failed to update item.');
+      setShoppingList((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, checked: !item.checked } : item
+        )
+      );
+      Alert.alert("Error", "Failed to update item.");
     }
   };
 
   const removeShoppingItem = async (id: string) => {
     try {
       await api.shoppingList.delete(id);
-      setShoppingList(prev => prev.filter(item => item.id !== id));
+      setShoppingList((prev) => prev.filter((item) => item.id !== id));
     } catch {
-      Alert.alert('Error', 'Failed to remove item.');
+      Alert.alert("Error", "Failed to remove item.");
     }
   };
 
   const moveCheckedToStock = async () => {
-    const checked = shoppingList.filter(i => i.checked);
+    const checked = shoppingList.filter((i) => i.checked);
     if (checked.length === 0) return;
 
     try {
-      const ids = checked.map(i => i.id);
+      const ids = checked.map((i) => i.id);
       await api.shoppingList.moveToInventory(ids);
 
       const [freshInventory, freshShopping] = await Promise.all([
@@ -240,9 +297,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
       setItems(freshInventory);
       setShoppingList(freshShopping);
-      Alert.alert('Moved!', `${checked.length} items added to your Stock!`);
+      Alert.alert("Moved!", `${checked.length} items added to your Stock!`);
     } catch {
-      Alert.alert('Error', 'Failed to move items.');
+      Alert.alert("Error", "Failed to move items.");
     }
   };
 
@@ -254,48 +311,89 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     return (
       <View style={styles.itemCard}>
         <View style={[styles.itemIconWrap, { backgroundColor: catStyle.bg }]}>
-          <Ionicons name={getCategoryIconName(item.category)} size={18} color={catStyle.text} />
+          <Ionicons
+            name={getCategoryIconName(item.category)}
+            size={18}
+            color={catStyle.text}
+          />
         </View>
         <View style={styles.itemMain}>
           <View style={styles.itemHeader}>
             <Text style={styles.itemName}>{item.name}</Text>
-            <View style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}>
-              <Ionicons name={getCategoryIconName(item.category)} size={12} color={catStyle.text} />
-              <Text style={[styles.categoryText, { color: catStyle.text }]}>{item.category}</Text>
+            <View
+              style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}
+            >
+              <Ionicons
+                name={getCategoryIconName(item.category)}
+                size={12}
+                color={catStyle.text}
+              />
+              <Text style={[styles.categoryText, { color: catStyle.text }]}>
+                {item.category}
+              </Text>
             </View>
           </View>
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Ionicons name="cube-outline" size={14} color={Colors.textSecondary} />
+              <Ionicons
+                name="cube-outline"
+                size={14}
+                color={Colors.textSecondary}
+              />
               <Text style={styles.metaText}>{item.quantity}</Text>
             </View>
             <View style={styles.metaItem}>
-              <Ionicons name="calendar-outline" size={14} color={Colors.textSecondary} />
-              <Text style={styles.metaText}>{formatShortDate(item.expiryDate)}</Text>
+              <Ionicons
+                name="calendar-outline"
+                size={14}
+                color={Colors.textSecondary}
+              />
+              <Text style={styles.metaText}>
+                {formatShortDate(item.expiryDate)}
+              </Text>
             </View>
           </View>
           <View style={styles.expiryRow}>
-            {days <= 3 && <Ionicons name="warning" size={14} color={Colors.warning} />}
-            <Text style={[styles.expiryText, days <= 3 && styles.expiryWarning]}>
-              {days < 0 ? 'Expired' : days === 0 ? 'Expires today' : `${days} days left`}
+            {days <= 3 && (
+              <Ionicons name="warning" size={14} color={Colors.warning} />
+            )}
+            <Text
+              style={[styles.expiryText, days <= 3 && styles.expiryWarning]}
+            >
+              {days < 0
+                ? "Expired"
+                : days === 0
+                ? "Expires today"
+                : `${days} days left`}
             </Text>
           </View>
           {badges.length > 0 && (
             <View style={styles.tagRow}>
-              {badges.map(badge => (
-                <View key={badge.label} style={[styles.tagChip, { backgroundColor: badge.bg }]}>
+              {badges.map((badge) => (
+                <View
+                  key={badge.label}
+                  style={[styles.tagChip, { backgroundColor: badge.bg }]}
+                >
                   <Ionicons name={badge.icon} size={12} color={badge.color} />
-                  <Text style={[styles.tagText, { color: badge.color }]}>{badge.label}</Text>
+                  <Text style={[styles.tagText, { color: badge.color }]}>
+                    {badge.label}
+                  </Text>
                 </View>
               ))}
             </View>
           )}
         </View>
         <View style={styles.itemActions}>
-          <TouchableOpacity onPress={() => setEditingItem(item)} style={styles.actionBtn}>
+          <TouchableOpacity
+            onPress={() => setEditingItem(item)}
+            style={styles.actionBtn}
+          >
             <Ionicons name="pencil" size={18} color={Colors.textSecondary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.actionBtn}>
+          <TouchableOpacity
+            onPress={() => removeItem(item.id)}
+            style={styles.actionBtn}
+          >
             <Ionicons name="trash" size={18} color={Colors.error} />
           </TouchableOpacity>
         </View>
@@ -307,21 +405,40 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     const catStyle = getCategoryStyle(item.category);
 
     return (
-      <TouchableOpacity style={styles.shoppingItem} onPress={() => toggleCheck(item.id)}>
+      <TouchableOpacity
+        style={styles.shoppingItem}
+        onPress={() => toggleCheck(item.id)}
+      >
         <Ionicons
-          name={item.checked ? 'checkbox' : 'square-outline'}
+          name={item.checked ? "checkbox" : "square-outline"}
           size={24}
           color={item.checked ? Colors.primary : Colors.textMuted}
         />
         <View style={styles.shoppingItemContent}>
-          <Text style={[styles.shoppingItemName, item.checked && styles.checkedText]}>{item.name}</Text>
+          <Text
+            style={[
+              styles.shoppingItemName,
+              item.checked && styles.checkedText,
+            ]}
+          >
+            {item.name}
+          </Text>
           <Text style={styles.shoppingItemQty}>{item.quantity}</Text>
         </View>
         <View style={[styles.categoryBadge, { backgroundColor: catStyle.bg }]}>
-          <Ionicons name={getCategoryIconName(item.category)} size={12} color={catStyle.text} />
-          <Text style={[styles.categoryText, { color: catStyle.text }]}>{item.category}</Text>
+          <Ionicons
+            name={getCategoryIconName(item.category)}
+            size={12}
+            color={catStyle.text}
+          />
+          <Text style={[styles.categoryText, { color: catStyle.text }]}>
+            {item.category}
+          </Text>
         </View>
-        <TouchableOpacity onPress={() => removeShoppingItem(item.id)} style={styles.actionBtn}>
+        <TouchableOpacity
+          onPress={() => removeShoppingItem(item.id)}
+          style={styles.actionBtn}
+        >
           <Ionicons name="close" size={18} color={Colors.textMuted} />
         </TouchableOpacity>
       </TouchableOpacity>
@@ -347,25 +464,50 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
                 <TextInput
                   style={styles.input}
                   value={editingItem.name}
-                  onChangeText={text => setEditingItem({ ...editingItem, name: text })}
+                  onChangeText={(text) =>
+                    setEditingItem({ ...editingItem, name: text })
+                  }
                 />
 
                 <Text style={styles.inputLabel}>Quantity</Text>
                 <TextInput
                   style={styles.input}
                   value={editingItem.quantity}
-                  onChangeText={text => setEditingItem({ ...editingItem, quantity: text })}
+                  onChangeText={(text) =>
+                    setEditingItem({ ...editingItem, quantity: text })
+                  }
                 />
 
                 <Text style={styles.inputLabel}>Category</Text>
                 <View style={styles.categoryPicker}>
-                  {(['produce', 'dairy', 'meat', 'pantry', 'frozen', 'other'] as const).map(cat => (
+                  {(
+                    [
+                      "produce",
+                      "dairy",
+                      "meat",
+                      "pantry",
+                      "frozen",
+                      "other",
+                    ] as const
+                  ).map((cat) => (
                     <TouchableOpacity
                       key={cat}
-                      style={[styles.categoryOption, editingItem.category === cat && styles.categoryOptionSelected]}
-                      onPress={() => setEditingItem({ ...editingItem, category: cat })}
+                      style={[
+                        styles.categoryOption,
+                        editingItem.category === cat &&
+                          styles.categoryOptionSelected,
+                      ]}
+                      onPress={() =>
+                        setEditingItem({ ...editingItem, category: cat })
+                      }
                     >
-                      <Text style={[styles.categoryOptionText, editingItem.category === cat && styles.categoryOptionTextSelected]}>
+                      <Text
+                        style={[
+                          styles.categoryOptionText,
+                          editingItem.category === cat &&
+                            styles.categoryOptionTextSelected,
+                        ]}
+                      >
                         {cat}
                       </Text>
                     </TouchableOpacity>
@@ -397,7 +539,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={newItem.name}
-                onChangeText={text => setNewItem({ ...newItem, name: text })}
+                onChangeText={(text) => setNewItem({ ...newItem, name: text })}
                 placeholder="e.g., Apples"
               />
 
@@ -405,19 +547,39 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
               <TextInput
                 style={styles.input}
                 value={newItem.quantity}
-                onChangeText={text => setNewItem({ ...newItem, quantity: text })}
+                onChangeText={(text) =>
+                  setNewItem({ ...newItem, quantity: text })
+                }
                 placeholder="e.g., 5 pieces"
               />
 
               <Text style={styles.inputLabel}>Category</Text>
               <View style={styles.categoryPicker}>
-                {(['produce', 'dairy', 'meat', 'pantry', 'frozen', 'other'] as const).map(cat => (
+                {(
+                  [
+                    "produce",
+                    "dairy",
+                    "meat",
+                    "pantry",
+                    "frozen",
+                    "other",
+                  ] as const
+                ).map((cat) => (
                   <TouchableOpacity
                     key={cat}
-                    style={[styles.categoryOption, newItem.category === cat && styles.categoryOptionSelected]}
+                    style={[
+                      styles.categoryOption,
+                      newItem.category === cat && styles.categoryOptionSelected,
+                    ]}
                     onPress={() => setNewItem({ ...newItem, category: cat })}
                   >
-                    <Text style={[styles.categoryOptionText, newItem.category === cat && styles.categoryOptionTextSelected]}>
+                    <Text
+                      style={[
+                        styles.categoryOptionText,
+                        newItem.category === cat &&
+                          styles.categoryOptionTextSelected,
+                      ]}
+                    >
                       {cat}
                     </Text>
                   </TouchableOpacity>
@@ -435,22 +597,34 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
       {/* Tab Switcher */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'stock' && styles.tabActive]}
-          onPress={() => setActiveTab('stock')}
+          style={[styles.tab, activeTab === "stock" && styles.tabActive]}
+          onPress={() => setActiveTab("stock")}
         >
-          <Text style={[styles.tabText, activeTab === 'stock' && styles.tabTextActive]}>Stock</Text>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "stock" && styles.tabTextActive,
+            ]}
+          >
+            Stock
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'shopping' && styles.tabActive]}
-          onPress={() => setActiveTab('shopping')}
+          style={[styles.tab, activeTab === "shopping" && styles.tabActive]}
+          onPress={() => setActiveTab("shopping")}
         >
-          <Text style={[styles.tabText, activeTab === 'shopping' && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "shopping" && styles.tabTextActive,
+            ]}
+          >
             Shopping ({shoppingList.length})
           </Text>
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'stock' ? (
+      {activeTab === "stock" ? (
         <>
           {/* Search Bar */}
           <View style={styles.searchContainer}>
@@ -466,10 +640,20 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
           {/* Action Buttons */}
           <View style={styles.actionRow}>
-            <Button onPress={() => setShowAddModal(true)} size="sm" variant="secondary" style={styles.actionButton}>
+            <Button
+              onPress={() => setShowAddModal(true)}
+              size="sm"
+              variant="secondary"
+              style={styles.actionButton}
+            >
               <Ionicons name="add" size={16} color={Colors.primary} /> Add Item
             </Button>
-            <Button onPress={handleScanReceipt} size="sm" isLoading={isScanning} style={styles.actionButton}>
+            <Button
+              onPress={handleScanReceipt}
+              size="sm"
+              isLoading={isScanning}
+              style={styles.actionButton}
+            >
               <Ionicons name="camera" size={16} color="#fff" /> Scan Receipt
             </Button>
           </View>
@@ -477,14 +661,20 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           {/* Items List */}
           <FlatList
             data={filteredItems}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             renderItem={renderStockItem}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
+                <Ionicons
+                  name="cube-outline"
+                  size={48}
+                  color={Colors.textMuted}
+                />
                 <Text style={styles.emptyText}>No items in stock</Text>
-                <Text style={styles.emptySubtext}>Add items or scan a receipt</Text>
+                <Text style={styles.emptySubtext}>
+                  Add items or scan a receipt
+                </Text>
               </View>
             }
           />
@@ -493,31 +683,43 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         <>
           {/* Shopping List Actions */}
           <View style={styles.actionRow}>
-            <Button onPress={handleGenerateShoppingList} size="sm" isLoading={isGenerating} style={styles.actionButton}>
+            <Button
+              onPress={handleGenerateShoppingList}
+              size="sm"
+              isLoading={isGenerating}
+              style={styles.actionButton}
+            >
               <Ionicons name="sparkles" size={16} color="#fff" /> Generate
             </Button>
             <Button
               onPress={moveCheckedToStock}
               size="sm"
               variant="secondary"
-              disabled={!shoppingList.some(i => i.checked)}
+              disabled={!shoppingList.some((i) => i.checked)}
               style={styles.actionButton}
             >
-              <Ionicons name="arrow-forward" size={16} color={Colors.primary} /> Move to Stock
+              <Ionicons name="arrow-forward" size={16} color={Colors.primary} />{" "}
+              Move to Stock
             </Button>
           </View>
 
           {/* Shopping List */}
           <FlatList
             data={shoppingList}
-            keyExtractor={item => item.id}
+            keyExtractor={(item) => item.id}
             renderItem={renderShoppingItem}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="cart-outline" size={48} color={Colors.textMuted} />
+                <Ionicons
+                  name="cart-outline"
+                  size={48}
+                  color={Colors.textMuted}
+                />
                 <Text style={styles.emptyText}>Shopping list is empty</Text>
-                <Text style={styles.emptySubtext}>Generate from meal plan or add items</Text>
+                <Text style={styles.emptySubtext}>
+                  Generate from meal plan or add items
+                </Text>
               </View>
             }
           />
@@ -533,7 +735,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   tabContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 16,
@@ -544,7 +746,7 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
     borderRadius: 11,
   },
   tabActive: {
@@ -553,15 +755,15 @@ const styles = StyleSheet.create({
   },
   tabText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.textMuted,
   },
   tabTextActive: {
     color: Colors.primary,
   },
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.surface,
     marginHorizontal: 20,
     marginBottom: 14,
@@ -577,7 +779,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   actionRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     paddingHorizontal: 20,
     marginBottom: 14,
@@ -590,21 +792,21 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   itemCard: {
-    flexDirection: 'row',
+    flexDirection: "row",
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 14,
     marginBottom: 12,
     ...Colors.shadow.medium,
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    alignItems: "flex-start",
+    justifyContent: "space-between",
   },
   itemIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 12,
     marginTop: 2,
     flexShrink: 0,
@@ -614,15 +816,15 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
     marginBottom: 6,
-    flexWrap: 'wrap',
+    flexWrap: "wrap",
   },
   itemName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.text,
     flex: 1,
   },
@@ -630,27 +832,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   categoryText: {
     fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    fontWeight: "700",
+    textTransform: "uppercase",
     letterSpacing: 0.4,
   },
   metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     marginBottom: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingVertical: 2,
   },
@@ -659,30 +861,30 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   expiryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 10,
-    justifyContent: 'flex-start',
-    alignItems: 'center',
+    justifyContent: "flex-start",
+    alignItems: "center",
   },
   tagChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 12,
-    maxWidth: '95%',
+    maxWidth: "95%",
   },
   tagText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 0.3,
   },
   expiryText: {
@@ -691,12 +893,12 @@ const styles = StyleSheet.create({
   },
   expiryWarning: {
     color: Colors.warning,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   itemActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
     gap: 6,
     flexShrink: 0,
   },
@@ -705,12 +907,12 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 10,
     backgroundColor: Colors.borderLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   shoppingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 16,
@@ -723,7 +925,7 @@ const styles = StyleSheet.create({
   },
   shoppingItemName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.text,
   },
   shoppingItemQty: {
@@ -732,16 +934,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkedText: {
-    textDecorationLine: 'line-through',
+    textDecorationLine: "line-through",
     color: Colors.textMuted,
   },
   emptyState: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 60,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.text,
     marginTop: 16,
   },
@@ -753,25 +955,25 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: Colors.overlay,
-    justifyContent: 'flex-end',
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    maxHeight: '85%',
+    maxHeight: "85%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: "700",
     color: Colors.text,
   },
   modalBody: {
@@ -779,7 +981,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.text,
     marginBottom: 10,
   },
@@ -794,23 +996,23 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
   },
   categoryPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginBottom: 28,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
   categoryOption: {
     flex: 1,
-    minWidth: '30%',
-    maxWidth: '32%',
+    minWidth: "30%",
+    maxWidth: "32%",
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: Colors.background,
     borderWidth: 2,
     borderColor: Colors.borderLight,
-    alignItems: 'center',
+    alignItems: "center",
   },
   categoryOptionSelected: {
     backgroundColor: Colors.primaryLight,
@@ -818,13 +1020,13 @@ const styles = StyleSheet.create({
   },
   categoryOptionText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.textSecondary,
-    textTransform: 'capitalize',
+    textTransform: "capitalize",
   },
   categoryOptionTextSelected: {
     color: Colors.primary,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   saveBtn: {
     marginBottom: 24,
