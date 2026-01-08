@@ -17,6 +17,7 @@ import { Colors } from '../constants/colors';
 import { Ingredient, ShoppingItem, MealPlanDay } from '../types';
 import { Button } from '../components/Button';
 import { parseReceiptImage, generateShoppingList } from '../services/geminiService';
+import { api } from '../services/api';
 
 interface InventoryScreenProps {
   items: Ingredient[];
@@ -60,8 +61,10 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
         setIsScanning(true);
         const mimeType = result.assets[0].mimeType || 'image/jpeg';
         const newItems = await parseReceiptImage(result.assets[0].base64, mimeType);
-        setItems(prev => [...prev, ...newItems]);
-        Alert.alert('Success', `Added ${newItems.length} items from receipt!`);
+
+        const created = await Promise.all(newItems.map(item => api.inventory.add(item)));
+        setItems(prev => [...prev, ...created]);
+        Alert.alert('Success', `Added ${created.length} items from receipt!`);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to scan receipt. Please try again.');
@@ -73,31 +76,57 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   const removeItem = (id: string) => {
     Alert.alert('Remove Item', 'Are you sure you want to remove this item?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => setItems(prev => prev.filter(i => i.id !== id)) },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.inventory.delete(id);
+            setItems(prev => prev.filter(i => i.id !== id));
+          } catch {
+            Alert.alert('Error', 'Failed to remove item.');
+          }
+        },
+      },
     ]);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingItem) return;
-    setItems(prev => prev.map(i => (i.id === editingItem.id ? editingItem : i)));
-    setEditingItem(null);
+    try {
+      const updated = await api.inventory.update(editingItem.id, {
+        name: editingItem.name,
+        quantity: editingItem.quantity,
+        category: editingItem.category,
+        expiryDate: editingItem.expiryDate,
+        caloriesPerUnit: editingItem.caloriesPerUnit,
+      });
+      setItems(prev => prev.map(i => (i.id === updated.id ? updated : i)));
+      setEditingItem(null);
+    } catch {
+      Alert.alert('Error', 'Failed to save changes.');
+    }
   };
 
-  const addNewItem = () => {
+  const addNewItem = async () => {
     if (!newItem.name || !newItem.quantity) {
       Alert.alert('Error', 'Please fill in name and quantity');
       return;
     }
-    const item: Ingredient = {
-      id: Math.random().toString(36).substring(7),
-      name: newItem.name,
-      quantity: newItem.quantity,
-      category: newItem.category as Ingredient['category'],
-      expiryDate: newItem.expiryDate || new Date().toISOString().split('T')[0],
-    };
-    setItems(prev => [...prev, item]);
-    setNewItem({ name: '', quantity: '', category: 'other', expiryDate: new Date().toISOString().split('T')[0] });
-    setShowAddModal(false);
+    try {
+      const created = await api.inventory.add({
+        id: 'temp',
+        name: newItem.name,
+        quantity: newItem.quantity,
+        category: newItem.category as Ingredient['category'],
+        expiryDate: newItem.expiryDate || new Date().toISOString().split('T')[0],
+      });
+      setItems(prev => [...prev, created]);
+      setNewItem({ name: '', quantity: '', category: 'other', expiryDate: new Date().toISOString().split('T')[0] });
+      setShowAddModal(false);
+    } catch {
+      Alert.alert('Error', 'Failed to add item.');
+    }
   };
 
   const getDaysUntilExpiry = (dateStr: string) => {
@@ -166,8 +195,9 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     setIsGenerating(true);
     try {
       const newList = await generateShoppingList(items, mealPlan);
-      setShoppingList(prev => [...prev, ...newList]);
-      Alert.alert('Success', `Added ${newList.length} items to shopping list!`);
+      const created = await Promise.all(newList.map(item => api.shoppingList.add(item)));
+      setShoppingList(prev => [...prev, ...created]);
+      Alert.alert('Success', `Added ${created.length} items to shopping list!`);
     } catch (e) {
       Alert.alert('Error', 'Failed to generate list');
     } finally {
@@ -175,32 +205,45 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
     }
   };
 
-  const toggleCheck = (id: string) => {
+  const toggleCheck = async (id: string) => {
     setShoppingList(prev => prev.map(item => (item.id === id ? { ...item, checked: !item.checked } : item)));
+    try {
+      await api.shoppingList.toggleChecked(id);
+    } catch {
+      // Revert on failure.
+      setShoppingList(prev => prev.map(item => (item.id === id ? { ...item, checked: !item.checked } : item)));
+      Alert.alert('Error', 'Failed to update item.');
+    }
   };
 
-  const removeShoppingItem = (id: string) => {
-    setShoppingList(prev => prev.filter(item => item.id !== id));
+  const removeShoppingItem = async (id: string) => {
+    try {
+      await api.shoppingList.delete(id);
+      setShoppingList(prev => prev.filter(item => item.id !== id));
+    } catch {
+      Alert.alert('Error', 'Failed to remove item.');
+    }
   };
 
-  const moveCheckedToStock = () => {
+  const moveCheckedToStock = async () => {
     const checked = shoppingList.filter(i => i.checked);
     if (checked.length === 0) return;
 
-    const today = new Date();
-    const defaultExpiry = new Date(today.setDate(today.getDate() + 7)).toISOString().split('T')[0];
+    try {
+      const ids = checked.map(i => i.id);
+      await api.shoppingList.moveToInventory(ids);
 
-    const newStockItems: Ingredient[] = checked.map(item => ({
-      id: item.id,
-      name: item.name,
-      quantity: item.quantity,
-      category: item.category,
-      expiryDate: defaultExpiry,
-    }));
+      const [freshInventory, freshShopping] = await Promise.all([
+        api.inventory.getAll(),
+        api.shoppingList.getAll(),
+      ]);
 
-    setItems(prev => [...prev, ...newStockItems]);
-    setShoppingList(prev => prev.filter(i => !i.checked));
-    Alert.alert('Moved!', `${checked.length} items added to your Stock!`);
+      setItems(freshInventory);
+      setShoppingList(freshShopping);
+      Alert.alert('Moved!', `${checked.length} items added to your Stock!`);
+    } catch {
+      Alert.alert('Error', 'Failed to move items.');
+    }
   };
 
   const renderStockItem = ({ item }: { item: Ingredient }) => {

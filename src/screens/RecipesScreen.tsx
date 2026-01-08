@@ -15,6 +15,7 @@ import { Colors } from '../constants/colors';
 import { Ingredient, Recipe, RecipeGenerationPreferences, UserProfile } from '../types';
 import { Button } from '../components/Button';
 import { generateRecipesFromInventory } from '../services/geminiService';
+import { api } from '../services/api';
 
 interface RecipesScreenProps {
   inventory: Ingredient[];
@@ -63,7 +64,16 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
     setLoading(true);
     try {
       const result = await generateRecipesFromInventory(inventory, user, prefs);
-      setRecipes(prev => [...result, ...prev]);
+
+      // Recipes get their IDs from the backend DB. Sync then reload so UI uses server IDs.
+      const merged = [...result, ...recipes];
+      await api.recipes.syncDiscovered(merged);
+      const [freshDiscovered, freshSaved] = await Promise.all([
+        api.recipes.getDiscovered(),
+        api.recipes.getSaved(),
+      ]);
+      setRecipes(freshDiscovered);
+      setSavedRecipes(freshSaved);
     } catch (e) {
       console.error(e);
     } finally {
@@ -73,12 +83,24 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
 
   const isRecipeSaved = (id: string) => savedRecipes.some(r => r.id === id);
 
-  const toggleSave = (recipe: Recipe) => {
+  const toggleSave = async (recipe: Recipe) => {
     const isSaved = isRecipeSaved(recipe.id);
-    if (isSaved) {
-      setSavedRecipes(prev => prev.filter(r => r.id !== recipe.id));
-    } else {
-      setSavedRecipes(prev => [...prev, recipe]);
+    try {
+      if (isSaved) {
+        await api.recipes.unsave(recipe.id);
+      } else {
+        await api.recipes.save(recipe.id);
+      }
+
+      const [freshDiscovered, freshSaved] = await Promise.all([
+        api.recipes.getDiscovered(),
+        api.recipes.getSaved(),
+      ]);
+      setRecipes(freshDiscovered);
+      setSavedRecipes(freshSaved);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update saved recipes.');
     }
   };
 

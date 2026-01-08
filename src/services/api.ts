@@ -8,6 +8,18 @@ import { Ingredient, UserProfile, Recipe, MealPlanDay, ShoppingItem } from '../t
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
 
+class ApiError extends Error {
+  status: number;
+  payload?: any;
+
+  constructor(message: string, status: number, payload?: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
 type TokenPair = {
   accessToken: string;
   refreshToken: string;
@@ -17,6 +29,28 @@ type TokenPair = {
 
 let accessToken: string | null = null;
 let refreshToken: string | null = null;
+
+type AuthExpiredCallback = () => void;
+const authExpiredCallbacks = new Set<AuthExpiredCallback>();
+
+export const authEvents = {
+  onAuthExpired: (cb: AuthExpiredCallback) => {
+    authExpiredCallbacks.add(cb);
+    return () => {
+      authExpiredCallbacks.delete(cb);
+    };
+  },
+};
+
+function notifyAuthExpired() {
+  for (const cb of authExpiredCallbacks) {
+    try {
+      cb();
+    } catch {
+      // ignore listener failures
+    }
+  }
+}
 
 export const authTokenStore = {
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => {
@@ -53,8 +87,14 @@ async function rawRequest<T>(
     const response = await fetch(url, config);
     
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `HTTP ${response.status}`);
+      const payload = await response.json().catch(() => ({}));
+      const message =
+        typeof payload?.message === 'string'
+          ? payload.message
+          : typeof payload?.error === 'string'
+            ? payload.error
+            : `HTTP ${response.status}`;
+      throw new ApiError(message, response.status, payload);
     }
     
     return response.json();
@@ -68,22 +108,33 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   try {
     return await rawRequest<T>(endpoint, options);
   } catch (err: any) {
-    const message = typeof err?.message === 'string' ? err.message : '';
-    const isUnauthorized = message.includes('HTTP 401');
+    const isUnauthorized = typeof err?.status === 'number' ? err.status === 401 : false;
     const isAuthEndpoint = endpoint.startsWith('/auth/');
 
-    if (!isUnauthorized || isAuthEndpoint || !refreshToken) {
+    if (!isUnauthorized || isAuthEndpoint) {
+      throw err;
+    }
+
+    if (!refreshToken) {
+      authTokenStore.clear();
+      notifyAuthExpired();
       throw err;
     }
 
     // Try refresh once, then retry the original request.
-    const refreshed = await rawRequest<TokenPair>('/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken }),
-    });
+    try {
+      const refreshed = await rawRequest<TokenPair>('/auth/refresh', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      });
 
-    authTokenStore.setTokens({ accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken });
-    return rawRequest<T>(endpoint, options);
+      authTokenStore.setTokens({ accessToken: refreshed.accessToken, refreshToken: refreshed.refreshToken });
+      return rawRequest<T>(endpoint, options);
+    } catch (refreshErr) {
+      authTokenStore.clear();
+      notifyAuthExpired();
+      throw refreshErr;
+    }
   }
 }
 

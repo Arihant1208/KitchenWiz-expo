@@ -38,10 +38,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, setUser, aut
     if (!isEditing) setEditedUser(user);
   }, [user, isEditing]);
 
-  const handleSave = () => {
-    setUser(editedUser);
-    setIsEditing(false);
-    Alert.alert('Saved!', 'Your profile has been updated.');
+  const handleSave = async () => {
+    try {
+      const updated = await api.user.update(editedUser);
+      setUser(updated);
+      setIsEditing(false);
+      Alert.alert('Saved!', 'Your profile has been updated.');
+    } catch {
+      Alert.alert('Error', 'Failed to save profile.');
+    }
   };
 
   const toggleArrayItem = (array: string[], item: string) => {

@@ -16,27 +16,29 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { Ingredient, UserProfile, MealPlanDay, Recipe, ShoppingItem, AuthSession } from './src/types';
 import { storage } from './src/services/storage';
 import { CustomTabBar } from './src/components/CustomTabBar';
-import { authTokenStore } from './src/services/api';
+import { api, authEvents, authTokenStore } from './src/services/api';
 import { useAuthRefresh } from './src/services/useAuthRefresh';
 import { Colors } from './src/constants/colors';
 
 const Tab = createBottomTabNavigator();
+
+const DEFAULT_USER: UserProfile = {
+  name: '',
+  dietaryRestrictions: [],
+  allergies: [],
+  goals: 'maintenance',
+  cookingSkill: 'intermediate',
+  householdSize: 1,
+  cuisinePreferences: [],
+  maxCookingTime: 60,
+};
 
 export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isDataLoading, setIsDataLoading] = useState(true);
   
   const [inventory, setInventory] = useState<Ingredient[]>([]);
-  const [user, setUser] = useState<UserProfile>({
-    name: '',
-    dietaryRestrictions: [],
-    allergies: [],
-    goals: 'maintenance',
-    cookingSkill: 'intermediate',
-    householdSize: 1,
-    cuisinePreferences: [],
-    maxCookingTime: 60,
-  });
+  const [user, setUser] = useState<UserProfile>(DEFAULT_USER);
   const [mealPlan, setMealPlan] = useState<MealPlanDay[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
@@ -63,6 +65,14 @@ export default function App() {
       setAuthSession({ mode: 'guest' });
     },
   });
+
+  useEffect(() => {
+    const unsubscribe = authEvents.onAuthExpired(() => {
+      console.warn('Auth expired, signing out');
+      setAuthSession({ mode: 'guest' });
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const loadAuth = async () => {
@@ -106,23 +116,33 @@ export default function App() {
         setRecipes([]);
         setSavedRecipes([]);
         setShoppingList([]);
-        setUser({
-          name: '',
-          dietaryRestrictions: [],
-          allergies: [],
-          goals: 'maintenance',
-          cookingSkill: 'intermediate',
-          householdSize: 1,
-          cuisinePreferences: [],
-          maxCookingTime: 60,
-        });
+        setUser(DEFAULT_USER);
         return;
       }
 
       setIsDataLoading(true);
       try {
-        const [storedInventory, storedUser, storedMealPlan, storedRecipes, storedSavedRecipes, storedShoppingList] =
+        // Prefer backend as the source of truth for signed-in users.
+        const [remoteInventory, remoteUser, remoteMealPlan, remoteDiscoveredRecipes, remoteSavedRecipes, remoteShopping] =
           await Promise.all([
+            api.inventory.getAll(),
+            api.user.get(),
+            api.mealPlan.get(),
+            api.recipes.getDiscovered(),
+            api.recipes.getSaved(),
+            api.shoppingList.getAll(),
+          ]);
+
+        const remoteIsEmpty =
+          remoteInventory.length === 0 &&
+          remoteMealPlan.length === 0 &&
+          remoteDiscoveredRecipes.length === 0 &&
+          remoteSavedRecipes.length === 0 &&
+          remoteShopping.length === 0;
+
+        // If the backend is empty but local storage has data (from older builds), migrate it once.
+        if (remoteIsEmpty) {
+          const [localInventory, localUser, localMealPlan, localRecipes, localSaved, localShopping] = await Promise.all([
             storage.inventory.get(),
             storage.user.get(),
             storage.mealPlan.get(),
@@ -131,14 +151,74 @@ export default function App() {
             storage.shoppingList.get(),
           ]);
 
-        setInventory(storedInventory);
-        setUser(storedUser);
-        setMealPlan(storedMealPlan);
-        setRecipes(storedRecipes);
-        setSavedRecipes(storedSavedRecipes);
-        setShoppingList(storedShoppingList);
+          const hasLocalData =
+            localInventory.length > 0 ||
+            localMealPlan.length > 0 ||
+            localRecipes.length > 0 ||
+            localSaved.length > 0 ||
+            localShopping.length > 0;
+
+          if (hasLocalData) {
+            // Inventory + shopping list have per-item endpoints; recipes/mealplan are sync-based.
+            await Promise.all([
+              localInventory.length > 0
+                ? Promise.all(localInventory.map(item => api.inventory.add(item))).then(() => undefined)
+                : Promise.resolve(),
+              localShopping.length > 0 ? api.shoppingList.sync(localShopping) : Promise.resolve(),
+              localMealPlan.length > 0 ? api.mealPlan.sync(localMealPlan) : Promise.resolve(),
+              localRecipes.length > 0 ? api.recipes.syncDiscovered(localRecipes) : Promise.resolve(),
+              localSaved.length > 0 ? api.recipes.syncSaved(localSaved) : Promise.resolve(),
+              api.user.update(localUser).catch(() => undefined),
+            ]);
+
+            const [mInv, mUser, mPlan, mDisc, mSaved, mShop] = await Promise.all([
+              api.inventory.getAll(),
+              api.user.get(),
+              api.mealPlan.get(),
+              api.recipes.getDiscovered(),
+              api.recipes.getSaved(),
+              api.shoppingList.getAll(),
+            ]);
+
+            setInventory(mInv);
+            setUser(mUser ?? DEFAULT_USER);
+            setMealPlan(mPlan);
+            setRecipes(mDisc);
+            setSavedRecipes(mSaved);
+            setShoppingList(mShop);
+            return;
+          }
+        }
+
+        setInventory(remoteInventory);
+        setUser(remoteUser ?? DEFAULT_USER);
+        setMealPlan(remoteMealPlan);
+        setRecipes(remoteDiscoveredRecipes);
+        setSavedRecipes(remoteSavedRecipes);
+        setShoppingList(remoteShopping);
       } catch (error) {
         console.error('Failed to load app data:', error);
+        // Fallback to local cache so the app still works if the backend is unreachable.
+        try {
+          const [storedInventory, storedUser, storedMealPlan, storedRecipes, storedSavedRecipes, storedShoppingList] =
+            await Promise.all([
+              storage.inventory.get(),
+              storage.user.get(),
+              storage.mealPlan.get(),
+              storage.recipes.get(),
+              storage.savedRecipes.get(),
+              storage.shoppingList.get(),
+            ]);
+
+          setInventory(storedInventory);
+          setUser(storedUser);
+          setMealPlan(storedMealPlan);
+          setRecipes(storedRecipes);
+          setSavedRecipes(storedSavedRecipes);
+          setShoppingList(storedShoppingList);
+        } catch (fallbackErr) {
+          console.error('Failed to load fallback local cache:', fallbackErr);
+        }
       } finally {
         setIsDataLoading(false);
       }
@@ -162,7 +242,7 @@ export default function App() {
       <SafeAreaProvider>
         <StatusBar style="dark" />
         <AuthScreen
-          onSignedIn={session => setAuthSession(session)}
+          onSignedIn={(session: AuthSession) => setAuthSession(session)}
         />
       </SafeAreaProvider>
     );

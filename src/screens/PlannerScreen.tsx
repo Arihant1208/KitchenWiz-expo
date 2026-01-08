@@ -13,6 +13,7 @@ import { Colors } from '../constants/colors';
 import { Ingredient, MealPlanDay, UserProfile, Recipe } from '../types';
 import { Button } from '../components/Button';
 import { generateWeeklyMealPlan } from '../services/geminiService';
+import { api } from '../services/api';
 
 interface PlannerScreenProps {
   user: UserProfile;
@@ -35,7 +36,9 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
     try {
       const plan = await generateWeeklyMealPlan(user, inventory);
       if (plan.length > 0) {
-        setMealPlan(plan);
+        await api.mealPlan.sync(plan);
+        const fresh = await api.mealPlan.get();
+        setMealPlan(fresh);
         Alert.alert('Success', 'Your weekly meal plan is ready!');
       } else {
         Alert.alert('Error', 'Failed to generate meal plan. Please try again.');
