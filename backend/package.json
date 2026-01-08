@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Backend API for KitchenWiz Mobile App",
   "main": "dist/server.js",
+  "engines": {
+    "node": "18.x"
+  },
   "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",

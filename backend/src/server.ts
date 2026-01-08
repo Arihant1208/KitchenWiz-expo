@@ -63,9 +63,12 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 KitchenWiz API Server running on http://localhost:${PORT}`);
-  console.log(`📚 Health check: http://localhost:${PORT}/health`);
-});
+// Only listen if not in Vercel environment
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🚀 KitchenWiz API Server running on http://localhost:${PORT}`);
+    console.log(`📚 Health check: http://localhost:${PORT}/health`);
+  });
+}
 
 export default app;
