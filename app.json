@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "kitchenwiz-expo",
-    "slug": "kitchenwiz-expo",
+    "name": "kitchenwiz",
+    "slug": "kitchenwiz",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -20,10 +20,16 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.arihantjain.kitchenwiz"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c3a13139-3b45-48a3-adb5-1274197036b0"
+      }
     }
   }
 }
