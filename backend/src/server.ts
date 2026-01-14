@@ -9,6 +9,7 @@ import recipeRoutes from "./routes/recipes";
 import mealPlanRoutes from "./routes/mealPlan";
 import shoppingListRoutes from "./routes/shoppingList";
 import emailVerificationRoutes from "./routes/emailVerification";
+import aiRoutes from "./routes/ai";
 
 import { requireAuth } from "./auth/middleware";
 
@@ -29,6 +30,7 @@ app.use("/api/inventory", requireAuth, inventoryRoutes);
 app.use("/api/recipes", requireAuth, recipeRoutes);
 app.use("/api/meal-plan", requireAuth, mealPlanRoutes);
 app.use("/api/shopping-list", requireAuth, shoppingListRoutes);
+app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/email-verification", emailVerificationRoutes);
 
 // Health Check

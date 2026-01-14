@@ -73,11 +73,29 @@ async function rawRequest<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
+
+  let clientTimeZone: string | undefined;
+  try {
+    // Hermes/JSCore support varies; keep this best-effort.
+    clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    clientTimeZone = undefined;
+  }
+
+  const tzOffsetMinutes = (() => {
+    try {
+      return String(new Date().getTimezoneOffset());
+    } catch {
+      return undefined;
+    }
+  })();
   
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...(clientTimeZone ? { 'X-Client-Timezone': clientTimeZone } : {}),
+      ...(tzOffsetMinutes ? { 'X-Client-Tz-Offset-Minutes': tzOffsetMinutes } : {}),
       ...options.headers,
     },
     ...options,
@@ -429,5 +447,10 @@ export const api = {
   shoppingList: shoppingListApi,
   healthCheck,
 };
+
+// Generic helper for internal services.
+export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  return request<T>(endpoint, options);
+}
 
 export default api;

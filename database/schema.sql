@@ -121,6 +121,16 @@ CREATE TABLE IF NOT EXISTS shopping_items (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- AI usage tracking (daily quota)
+CREATE TABLE IF NOT EXISTS ai_usage_daily (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day DATE NOT NULL,
+    requests_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, day)
+);
+
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_expiry ON inventory_items(expiry_date);
@@ -128,6 +138,7 @@ CREATE INDEX IF NOT EXISTS idx_recipes_user ON recipes(user_id);
 CREATE INDEX IF NOT EXISTS idx_recipes_saved ON recipes(user_id, is_saved);
 CREATE INDEX IF NOT EXISTS idx_meal_plans_user ON meal_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_shopping_user ON shopping_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_day ON ai_usage_daily(user_id, day);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_identities_user ON user_identities(user_id);
 CREATE INDEX IF NOT EXISTS idx_identities_provider_sub ON user_identities(provider, provider_sub);
@@ -190,3 +201,6 @@ CREATE TRIGGER update_meal_plans_updated_at BEFORE UPDATE ON meal_plans FOR EACH
 
 DROP TRIGGER IF EXISTS update_shopping_updated_at ON shopping_items;
 CREATE TRIGGER update_shopping_updated_at BEFORE UPDATE ON shopping_items FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_ai_usage_daily_updated_at ON ai_usage_daily;
+CREATE TRIGGER update_ai_usage_daily_updated_at BEFORE UPDATE ON ai_usage_daily FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
