@@ -28,7 +28,7 @@ jobs:
         run: npm ci
 
       - name: Typecheck
-        run: npm exec -- tsc -p tsconfig.json --noEmit
+        run: npm run typecheck
 
   backend:
     name: Backend (build)
