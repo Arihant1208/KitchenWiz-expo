@@ -43,9 +43,11 @@ jobs:
         run: sudo apt-get update; sudo apt-get install -y postgresql-client
 
       - name: Check secrets
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
         run: |
           echo "Checking deployment secrets..."
-          if [ -z "${{ secrets.PROD_DATABASE_URL }}" ]; then
+          if [ -z "$DATABASE_URL" ]; then
             echo "❌ PROD_DATABASE_URL secret is not set"
           else
             echo "✅ PROD_DATABASE_URL secret is set"
@@ -68,9 +70,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check secrets
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
         run: |
           echo "Checking deployment secrets..."
-          if [ -z "${{ secrets.VERCEL_DEPLOY_HOOK }}" ]; then
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
             echo "❌ VERCEL_DEPLOY_HOOK secret is not set"
           else
             echo "✅ VERCEL_DEPLOY_HOOK secret is set"
