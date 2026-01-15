@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Ingredient, Recipe, RecipeGenerationPreferences, UserProfile } from '../types';
@@ -124,90 +125,92 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
     const isSaved = isRecipeSaved(selectedRecipe.id);
     const chips = getRecipeChips(selectedRecipe);
     return (
-      <ScrollView style={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={() => setSelectedRecipe(null)}>
-          <Ionicons name="arrow-back" size={20} color={Colors.primary} />
-          <Text style={styles.backText}>Back to Recipes</Text>
-        </TouchableOpacity>
-
-        <View style={styles.detailCard}>
-          <Image
-            source={{ uri: `https://picsum.photos/seed/${selectedRecipe.id}/800/400` }}
-            style={styles.detailImage}
-          />
-
-          <View style={styles.detailBadge}>
-            <Text style={styles.detailBadgeText}>
-              {selectedRecipe.matchScore ? `${selectedRecipe.matchScore}% Match` : 'Recipe'}
-            </Text>
-          </View>
-
-          <TouchableOpacity style={styles.saveButton} onPress={() => toggleSave(selectedRecipe)}>
-            <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={24} color={Colors.error} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView style={styles.scroll}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setSelectedRecipe(null)}>
+            <Ionicons name="arrow-back" size={20} color={Colors.primary} />
+            <Text style={styles.backText}>Back to Recipes</Text>
           </TouchableOpacity>
 
-          <View style={styles.detailContent}>
-            <Text style={styles.detailTitle}>{selectedRecipe.title}</Text>
+          <View style={styles.detailCard}>
+            <Image
+              source={{ uri: `https://picsum.photos/seed/${selectedRecipe.id}/800/400` }}
+              style={styles.detailImage}
+            />
 
-            <View style={styles.detailMeta}>
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.metaText}>
-                  {(selectedRecipe.prepTime || 0) + (selectedRecipe.cookTime || 0) || 30}m
-                </Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="flame-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.metaText}>{selectedRecipe.calories || 400} kcal</Text>
-              </View>
+            <View style={styles.detailBadge}>
+              <Text style={styles.detailBadgeText}>
+                {selectedRecipe.matchScore ? `${selectedRecipe.matchScore}% Match` : 'Recipe'}
+              </Text>
             </View>
 
-            {chips.length > 0 && (
-              <View style={styles.chipRow}>
-                {chips.map(chip => (
-                  <View key={chip.label} style={styles.chip}>
-                    <Ionicons name={chip.icon} size={14} color={Colors.textSecondary} />
-                    <Text style={styles.chipText}>{chip.label}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
+            <TouchableOpacity style={styles.saveButton} onPress={() => toggleSave(selectedRecipe)}>
+              <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={24} color={Colors.error} />
+            </TouchableOpacity>
 
-            {selectedRecipe.description && (
-              <Text style={styles.detailDescription}>{selectedRecipe.description}</Text>
-            )}
+            <View style={styles.detailContent}>
+              <Text style={styles.detailTitle}>{selectedRecipe.title}</Text>
 
-            {selectedRecipe.ingredients && (
-              <View style={styles.ingredientsCard}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.sectionTitle}>Ingredients</Text>
+              <View style={styles.detailMeta}>
+                <View style={styles.metaItem}>
+                  <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.metaText}>
+                    {(selectedRecipe.prepTime || 0) + (selectedRecipe.cookTime || 0) || 30}m
+                  </Text>
                 </View>
-                {selectedRecipe.ingredients.map((ing, idx) => (
-                  <View key={idx} style={styles.ingredientRow}>
-                    <Text style={styles.ingredientName}>{ing.name}</Text>
-                    <Text style={styles.ingredientAmount}>{ing.amount}</Text>
-                  </View>
-                ))}
+                <View style={styles.metaItem}>
+                  <Ionicons name="flame-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.metaText}>{selectedRecipe.calories || 400} kcal</Text>
+                </View>
               </View>
-            )}
 
-            {selectedRecipe.instructions && (
-              <View style={styles.instructionsSection}>
-                <Text style={styles.sectionTitle}>Instructions</Text>
-                {selectedRecipe.instructions.map((step, idx) => (
-                  <View key={idx} style={styles.instructionRow}>
-                    <View style={styles.stepNumber}>
-                      <Text style={styles.stepNumberText}>{idx + 1}</Text>
+              {chips.length > 0 && (
+                <View style={styles.chipRow}>
+                  {chips.map(chip => (
+                    <View key={chip.label} style={styles.chip}>
+                      <Ionicons name={chip.icon} size={14} color={Colors.textSecondary} />
+                      <Text style={styles.chipText}>{chip.label}</Text>
                     </View>
-                    <Text style={styles.instructionText}>{step}</Text>
+                  ))}
+                </View>
+              )}
+
+              {selectedRecipe.description && (
+                <Text style={styles.detailDescription}>{selectedRecipe.description}</Text>
+              )}
+
+              {selectedRecipe.ingredients && (
+                <View style={styles.ingredientsCard}>
+                  <View style={styles.sectionHeader}>
+                    <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.sectionTitle}>Ingredients</Text>
                   </View>
-                ))}
-              </View>
-            )}
+                  {selectedRecipe.ingredients.map((ing, idx) => (
+                    <View key={idx} style={styles.ingredientRow}>
+                      <Text style={styles.ingredientName}>{ing.name}</Text>
+                      <Text style={styles.ingredientAmount}>{ing.amount}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {selectedRecipe.instructions && (
+                <View style={styles.instructionsSection}>
+                  <Text style={styles.sectionTitle}>Instructions</Text>
+                  {selectedRecipe.instructions.map((step, idx) => (
+                    <View key={idx} style={styles.instructionRow}>
+                      <View style={styles.stepNumber}>
+                        <Text style={styles.stepNumberText}>{idx + 1}</Text>
+                      </View>
+                      <Text style={styles.instructionText}>{step}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
@@ -265,8 +268,9 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      {/* Preferences Modal */}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.content}>
+        {/* Preferences Modal */}
       <Modal visible={showPrefsModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -439,7 +443,8 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
           </View>
         }
       />
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -447,6 +452,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
   },
   modalOverlay: {
     flex: 1,

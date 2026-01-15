@@ -8,6 +8,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Ingredient, MealPlanDay, UserProfile, Recipe } from '../types';
@@ -90,75 +91,78 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
   // Recipe Detail View
   if (selectedMeal) {
     return (
-      <ScrollView style={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={() => setSelectedMeal(null)}>
-          <Ionicons name="arrow-back" size={20} color={Colors.primary} />
-          <Text style={styles.backText}>Back to Planner</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView style={styles.scroll}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setSelectedMeal(null)}>
+            <Ionicons name="arrow-back" size={20} color={Colors.primary} />
+            <Text style={styles.backText}>Back to Planner</Text>
+          </TouchableOpacity>
 
-        <View style={styles.detailCard}>
-          <Image
-            source={{ uri: `https://picsum.photos/seed/${selectedMeal.id}/800/400` }}
-            style={styles.detailImage}
-          />
+          <View style={styles.detailCard}>
+            <Image
+              source={{ uri: `https://picsum.photos/seed/${selectedMeal.id}/800/400` }}
+              style={styles.detailImage}
+            />
 
-          <View style={styles.detailContent}>
-            <Text style={styles.detailTitle}>{selectedMeal.title}</Text>
+            <View style={styles.detailContent}>
+              <Text style={styles.detailTitle}>{selectedMeal.title}</Text>
 
-            <View style={styles.detailMeta}>
-              <View style={styles.metaItem}>
-                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.metaText}>
-                  {(selectedMeal.prepTime || 0) + (selectedMeal.cookTime || 0) || 30}m
-                </Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="flame-outline" size={16} color={Colors.textSecondary} />
-                <Text style={styles.metaText}>{selectedMeal.calories || 400} kcal</Text>
-              </View>
-            </View>
-
-            {selectedMeal.description && (
-              <Text style={styles.detailDescription}>{selectedMeal.description}</Text>
-            )}
-
-            {selectedMeal.ingredients && selectedMeal.ingredients.length > 0 && (
-              <View style={styles.ingredientsCard}>
-                <View style={styles.sectionHeader}>
-                  <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
-                  <Text style={styles.sectionTitle}>Ingredients</Text>
+              <View style={styles.detailMeta}>
+                <View style={styles.metaItem}>
+                  <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.metaText}>
+                    {(selectedMeal.prepTime || 0) + (selectedMeal.cookTime || 0) || 30}m
+                  </Text>
                 </View>
-                {selectedMeal.ingredients.map((ing, idx) => (
-                  <View key={idx} style={styles.ingredientRow}>
-                    <Text style={styles.ingredientName}>{ing.name}</Text>
-                    <Text style={styles.ingredientAmount}>{ing.amount}</Text>
-                  </View>
-                ))}
+                <View style={styles.metaItem}>
+                  <Ionicons name="flame-outline" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.metaText}>{selectedMeal.calories || 400} kcal</Text>
+                </View>
               </View>
-            )}
 
-            {selectedMeal.instructions && selectedMeal.instructions.length > 0 && (
-              <View style={styles.instructionsSection}>
-                <Text style={styles.sectionTitle}>Instructions</Text>
-                {selectedMeal.instructions.map((step, idx) => (
-                  <View key={idx} style={styles.instructionRow}>
-                    <View style={styles.stepNumber}>
-                      <Text style={styles.stepNumberText}>{idx + 1}</Text>
-                    </View>
-                    <Text style={styles.instructionText}>{step}</Text>
+              {selectedMeal.description && (
+                <Text style={styles.detailDescription}>{selectedMeal.description}</Text>
+              )}
+
+              {selectedMeal.ingredients && selectedMeal.ingredients.length > 0 && (
+                <View style={styles.ingredientsCard}>
+                  <View style={styles.sectionHeader}>
+                    <Ionicons name="restaurant-outline" size={18} color={Colors.primary} />
+                    <Text style={styles.sectionTitle}>Ingredients</Text>
                   </View>
-                ))}
-              </View>
-            )}
+                  {selectedMeal.ingredients.map((ing, idx) => (
+                    <View key={idx} style={styles.ingredientRow}>
+                      <Text style={styles.ingredientName}>{ing.name}</Text>
+                      <Text style={styles.ingredientAmount}>{ing.amount}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {selectedMeal.instructions && selectedMeal.instructions.length > 0 && (
+                <View style={styles.instructionsSection}>
+                  <Text style={styles.sectionTitle}>Instructions</Text>
+                  {selectedMeal.instructions.map((step, idx) => (
+                    <View key={idx} style={styles.instructionRow}>
+                      <View style={styles.stepNumber}>
+                        <Text style={styles.stepNumberText}>{idx + 1}</Text>
+                      </View>
+                      <Text style={styles.instructionText}>{step}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.content}>
+        <View style={styles.header}>
         <View>
           <Text style={styles.title}>Meal Planner</Text>
           <Text style={styles.subtitle}>Plan your week ahead</Text>
@@ -200,7 +204,8 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
           ))}
         </ScrollView>
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
@@ -208,6 +213,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

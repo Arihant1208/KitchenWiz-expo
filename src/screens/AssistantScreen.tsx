@@ -10,6 +10,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { ChatMessage, Ingredient, UserProfile } from '../types';
@@ -21,6 +22,7 @@ interface AssistantScreenProps {
 }
 
 export const AssistantScreen: React.FC<AssistantScreenProps> = ({ inventory, user }) => {
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -97,69 +99,72 @@ export const AssistantScreen: React.FC<AssistantScreenProps> = ({ inventory, use
   ];
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>AI Assistant</Text>
-        <Text style={styles.subtitle}>Ask me anything about cooking!</Text>
-      </View>
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={item => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messagesList}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-        ListHeaderComponent={
-          messages.length === 1 ? (
-            <View style={styles.suggestions}>
-              <Text style={styles.suggestionsTitle}>Try asking:</Text>
-              <View style={styles.suggestionsGrid}>
-                {suggestedQuestions.map((q, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={styles.suggestionChip}
-                    onPress={() => setInputText(q)}
-                  >
-                    <Text style={styles.suggestionText}>{q}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ) : null
-        }
-      />
-
-      {isLoading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={Colors.primary} />
-          <Text style={styles.loadingText}>Thinking...</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>AI Assistant</Text>
+          <Text style={styles.subtitle}>Ask me anything about cooking!</Text>
         </View>
-      )}
 
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Ask me anything..."
-          placeholderTextColor={Colors.textMuted}
-          multiline
-          maxLength={500}
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={item => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.messagesList}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            messages.length === 1 ? (
+              <View style={styles.suggestions}>
+                <Text style={styles.suggestionsTitle}>Try asking:</Text>
+                <View style={styles.suggestionsGrid}>
+                  {suggestedQuestions.map((q, i) => (
+                    <TouchableOpacity
+                      key={i}
+                      style={styles.suggestionChip}
+                      onPress={() => setInputText(q)}
+                    >
+                      <Text style={styles.suggestionText}>{q}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ) : null
+          }
         />
-        <TouchableOpacity
-          style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim() || isLoading}
-        >
-          <Ionicons name="send" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.loadingText}>Thinking...</Text>
+          </View>
+        )}
+
+        <View style={[styles.inputContainer, { paddingBottom: 16 + insets.bottom }]}>
+          <TextInput
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask me anything..."
+            placeholderTextColor={Colors.textMuted}
+            multiline
+            maxLength={500}
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+            onPress={handleSend}
+            disabled={!inputText.trim() || isLoading}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
@@ -167,6 +172,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  content: {
+    flex: 1,
   },
   header: {
     paddingHorizontal: 20,

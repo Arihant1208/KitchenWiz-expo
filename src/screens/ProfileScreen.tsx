@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { AuthSession, UserProfile } from '../types';
@@ -96,7 +97,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, setUser, aut
 
   return (
     <>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
         <TouchableOpacity
@@ -409,7 +411,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, setUser, aut
             </Button>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
       <AuthSheet
         visible={isAuthOpen}
@@ -429,6 +432,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     padding: 20,

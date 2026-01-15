@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Ingredient } from '../types';
@@ -41,7 +42,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ inventory }) =
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
       {/* Header with greeting */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -228,7 +230,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ inventory }) =
       </View>
 
       <View style={styles.bottomSpacer} />
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -236,6 +239,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scroll: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

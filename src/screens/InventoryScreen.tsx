@@ -11,6 +11,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Colors } from "../constants/colors";
@@ -446,7 +447,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* Edit Modal */}
       <Modal visible={!!editingItem} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -725,7 +726,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
           />
         </>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 
