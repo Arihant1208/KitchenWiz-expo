@@ -35,12 +35,24 @@ jobs:
     needs: changes
     if: needs.changes.outputs.database == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install psql client
         run: sudo apt-get update; sudo apt-get install -y postgresql-client
+
+      - name: Check secrets
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          echo "Checking deployment secrets..."
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ PROD_DATABASE_URL secret is not set"
+          else
+            echo "✅ PROD_DATABASE_URL secret is set"
+          fi
 
       - name: Apply schema (deploy-safe)
         env:
@@ -57,7 +69,19 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    environment: production
     steps:
+      - name: Check secrets
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          echo "Checking deployment secrets..."
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "❌ VERCEL_DEPLOY_HOOK secret is not set"
+          else
+            echo "✅ VERCEL_DEPLOY_HOOK secret is set"
+          fi
+
       - name: Trigger Vercel deploy hook (optional)
         env:
           VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
