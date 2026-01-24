@@ -23,7 +23,7 @@ router.get('/', async (req: any, res: Response) => {
     }));
     res.json({ items });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Get inventory failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -51,7 +51,7 @@ router.post('/', async (req: any, res: Response) => {
       caloriesPerUnit: result.rows[0].calories_per_unit
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Add inventory item failed');
     res.status(500).json({ error: 'Failed to add item' });
   }
 });
@@ -86,7 +86,7 @@ router.put('/:id', async (req: any, res: Response) => {
       caloriesPerUnit: result.rows[0].calories_per_unit
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Update inventory item failed');
     res.status(500).json({ error: 'Failed to update item' });
   }
 });
@@ -102,7 +102,7 @@ router.delete('/:id', async (req: any, res: Response) => {
     await query('DELETE FROM inventory_items WHERE id = $1 AND user_id = $2', [id, userId]);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Delete inventory item failed');
     res.status(500).json({ error: 'Failed to delete item' });
   }
 });
@@ -133,7 +133,7 @@ router.post('/sync', async (req: any, res: Response) => {
     
     res.json({ success: true, count: items.length });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Sync inventory failed');
     res.status(500).json({ error: 'Failed to sync inventory' });
   }
 });

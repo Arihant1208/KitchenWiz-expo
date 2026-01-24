@@ -15,7 +15,7 @@ router.get('/discovered', async (req: any, res: Response) => {
     );
     res.json({ recipes: result.rows.map(mapRecipe) });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Get discovered recipes failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -32,7 +32,7 @@ router.get('/saved', async (req: any, res: Response) => {
     );
     res.json({ recipes: result.rows.map(mapRecipe) });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Get saved recipes failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -57,7 +57,7 @@ router.post('/discovered', async (req: any, res: Response) => {
     
     res.json({ success: true, count: recipes.length });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Sync discovered recipes failed');
     res.status(500).json({ error: 'Failed to sync discovered recipes' });
   }
 });
@@ -82,7 +82,7 @@ router.post('/saved', async (req: any, res: Response) => {
     
     res.json({ success: true, count: recipes.length });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Sync saved recipes failed');
     res.status(500).json({ error: 'Failed to sync saved recipes' });
   }
 });
@@ -106,7 +106,7 @@ router.post('/:id/save', async (req: any, res: Response) => {
     
     res.json(mapRecipe(result.rows[0]));
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Save recipe failed');
     res.status(500).json({ error: 'Failed to save recipe' });
   }
 });
@@ -130,7 +130,7 @@ router.post('/:id/unsave', async (req: any, res: Response) => {
     
     res.json(mapRecipe(result.rows[0]));
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Unsave recipe failed');
     res.status(500).json({ error: 'Failed to unsave recipe' });
   }
 });

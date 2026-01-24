@@ -24,7 +24,7 @@ router.get('/', async (req: any, res: Response) => {
     
     res.json({ items });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Get shopping list failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -52,7 +52,7 @@ router.post('/', async (req: any, res: Response) => {
       checked: result.rows[0].checked
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Add shopping item failed');
     res.status(500).json({ error: 'Failed to add item' });
   }
 });
@@ -69,7 +69,7 @@ router.delete('/checked', async (req: any, res: Response) => {
     );
     res.json({ success: true, deleted: result.rowCount });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Clear checked shopping items failed');
     res.status(500).json({ error: 'Failed to clear checked items' });
   }
 });
@@ -102,7 +102,7 @@ router.post('/:id/toggle', async (req: any, res: Response) => {
       checked: result.rows[0].checked
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Toggle shopping item failed');
     res.status(500).json({ error: 'Failed to toggle item' });
   }
 });
@@ -140,7 +140,7 @@ router.put('/:id', async (req: any, res: Response) => {
       checked: result.rows[0].checked,
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Update shopping item failed');
     res.status(500).json({ error: 'Failed to update item' });
   }
 });
@@ -156,7 +156,7 @@ router.delete('/:id', async (req: any, res: Response) => {
     await query('DELETE FROM shopping_items WHERE id = $1 AND user_id = $2', [id, userId]);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Delete shopping item failed');
     res.status(500).json({ error: 'Failed to delete item' });
   }
 });
@@ -185,7 +185,7 @@ router.post('/sync', async (req: any, res: Response) => {
     
     res.json({ success: true, count: list.length });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Sync shopping list failed');
     res.status(500).json({ error: 'Failed to sync shopping list' });
   }
 });
@@ -231,7 +231,7 @@ router.post('/move-to-inventory', async (req: any, res: Response) => {
     
     res.json({ success: true, moved: itemsResult.rows.length });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Move shopping items to inventory failed');
     res.status(500).json({ error: 'Failed to move items to inventory' });
   }
 });

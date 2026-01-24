@@ -24,7 +24,7 @@ router.get('/', async (req: any, res: Response) => {
 
     res.json(mapUserFromDb(result.rows[0]));
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Get user profile failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -73,7 +73,7 @@ router.put('/', async (req: any, res: Response) => {
     );
     res.json(mapUserFromDb(result.rows[0]));
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Update user profile failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });

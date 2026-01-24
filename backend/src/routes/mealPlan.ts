@@ -23,7 +23,7 @@ router.get('/', async (req: any, res: Response) => {
     
     res.json({ mealPlan });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Get meal plan failed');
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
@@ -58,7 +58,7 @@ router.post('/sync', async (req: any, res: Response) => {
     
     res.json({ success: true, days: plan.length });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Sync meal plan failed');
     res.status(500).json({ error: 'Failed to sync meal plan' });
   }
 });
@@ -103,7 +103,7 @@ router.put('/:day', async (req: any, res: Response) => {
     
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Update meal plan day failed');
     res.status(500).json({ error: 'Failed to update meal plan' });
   }
 });
@@ -117,7 +117,7 @@ router.delete('/', async (req: any, res: Response) => {
     await query('DELETE FROM meal_plans WHERE user_id = $1', [userId]);
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Clear meal plan failed');
     res.status(500).json({ error: 'Failed to clear meal plan' });
   }
 });

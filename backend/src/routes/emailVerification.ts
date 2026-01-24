@@ -58,7 +58,7 @@ router.post('/request-verification', requireAuth, async (req: any, res: Response
       ...(process.env.NODE_ENV === 'development' ? { token } : {}),
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Request email verification failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });
@@ -103,7 +103,7 @@ router.post('/verify-email', async (req: any, res: Response) => {
 
     return res.json({ success: true, message: 'Email verified successfully' });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Verify email failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });
@@ -134,7 +134,7 @@ router.get('/verification-status', requireAuth, async (req: any, res: Response) 
       hasEmail: !!user.email,
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Check email verification status failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });

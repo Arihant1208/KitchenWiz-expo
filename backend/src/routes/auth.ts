@@ -89,7 +89,7 @@ router.post('/signup', async (req: any, res: Response) => {
       ...tokens,
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Signup failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });
@@ -124,7 +124,7 @@ router.post('/login', async (req: any, res: Response) => {
       ...tokens,
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Login failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });
@@ -211,7 +211,7 @@ router.post('/oauth/:provider', async (req: any, res: Response) => {
     const tokens = await issueTokens(user.id, req);
     return res.json({ user, ...tokens });
   } catch (err) {
-    console.error(err);
+    req.log.warn({ err }, 'OAuth token verification failed');
     return res.status(401).json({ message: 'Invalid idToken' });
   }
 });
@@ -252,7 +252,7 @@ router.post('/link', requireAuth, async (req: any, res: Response) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    req.log.warn({ err }, 'Link provider failed');
     return res.status(401).json({ message: 'Invalid idToken' });
   }
 });
@@ -315,7 +315,7 @@ router.post('/refresh', async (req: any, res: Response) => {
       refreshTokenExpiresInSeconds,
     });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Refresh token failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });
@@ -337,7 +337,7 @@ router.post('/logout', async (req: any, res: Response) => {
 
     return res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    req.log.error({ err }, 'Logout failed');
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 });

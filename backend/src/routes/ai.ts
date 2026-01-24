@@ -148,6 +148,17 @@ async function getRecipeForSlot(params: {
     const mapped = mapLibraryRowToRecipe(top.recipe, servings);
     mapped.matchScore = Math.round(top.inventoryCoverage * 100);
     usedRecipeIds.add(top.recipe.id);
+
+    req.log.info(
+      {
+        action: 'weekly_meal_plan_slot',
+        mealType,
+        mode: 'reuse',
+        rotated: reusableUnused ? true : false,
+        recipeId: top.recipe.id,
+      },
+      'Selected recipe for slot'
+    );
     return mapped;
   }
 
@@ -172,6 +183,17 @@ Return ONLY a valid JSON object with:
 - cookTime (number in minutes)
 - calories (number)
 `;
+
+  req.log.info(
+    {
+      action: 'weekly_meal_plan_slot',
+      mealType,
+      mode: 'generate',
+      maxTimeMinutes,
+      servings,
+    },
+    'Generating recipe for slot'
+  );
 
   const model = getModel();
   const result = await model.generateContent(prompt);
@@ -237,7 +259,7 @@ router.use(async (req: any, res: Response, next) => {
     req.aiQuota = { used: count, limit: DAILY_AI_REQUEST_LIMIT, day: dayKey };
     return next();
   } catch (err) {
-    console.error('AI quota check failed:', err);
+    req.log.error({ err, action: 'ai_quota_check' }, 'AI quota check failed');
     return res.status(500).json({ message: 'AI quota check failed' });
   }
 });
@@ -278,7 +300,7 @@ Categories must be one of: produce, dairy, meat, pantry, frozen, other.`;
 
     return res.json(items);
   } catch (err) {
-    console.error('AI receipt parse error:', err);
+    req.log.error({ err, action: 'receipt_parse' }, 'AI receipt parse failed');
     return res.status(500).json({ message: 'Failed to read receipt.' });
   }
 });
@@ -346,6 +368,15 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
 
       return res.json(mapped);
     }
+
+    req.log.info(
+      {
+        action: 'recipes_from_inventory',
+        mode: 'generate',
+        reason: ranked.length === 0 ? 'no_candidates' : 'gate_failed',
+      },
+      'Generating recipes from inventory'
+    );
 
     // 2) Generate (fallback)
     const prompt = `
@@ -432,7 +463,7 @@ Return ONLY a valid JSON array with objects containing:
 
     return res.json(recipes);
   } catch (err) {
-    console.error('AI recipe gen error:', err);
+    req.log.error({ err, action: 'recipes_from_inventory' }, 'AI recipe generation failed');
     return res.status(500).json({ message: 'Failed to generate recipes.' });
   }
 });
@@ -499,7 +530,7 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
 
     return res.json(days);
   } catch (err) {
-    console.error('AI meal plan error:', err);
+    req.log.error({ err, action: 'weekly_meal_plan' }, 'AI meal plan failed');
     return res.status(500).json({ message: 'Failed to generate meal plan.' });
   }
 });
@@ -547,7 +578,7 @@ Return ONLY a valid JSON array with objects containing:
 
     return res.json(items);
   } catch (err) {
-    console.error('AI shopping list error:', err);
+    req.log.error({ err, action: 'shopping_list' }, 'AI shopping list failed');
     return res.status(500).json({ message: 'Failed to generate shopping list.' });
   }
 });
@@ -569,7 +600,7 @@ router.post('/chat', async (req: any, res: Response) => {
 
     return res.json({ response });
   } catch (err) {
-    console.error('AI chat error:', err);
+    req.log.error({ err, action: 'chat' }, 'AI chat failed');
     return res.status(500).json({ message: "Sorry, I couldn't process your message. Please try again." });
   }
 });
