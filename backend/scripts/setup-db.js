@@ -2,6 +2,9 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
+// Ensure DATABASE_URL / DB_* are loaded when running this script directly.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
 async function setupDatabase() {
   const connectionString = process.env.DATABASE_URL;
   const hasUrl = typeof connectionString === 'string' && connectionString.length > 0;

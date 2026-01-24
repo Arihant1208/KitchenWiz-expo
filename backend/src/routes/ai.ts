@@ -1,6 +1,14 @@
 import { Router, Response } from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { query } from '../db';
+import {
+  fetchLibraryCandidates,
+  incrementUsage,
+  insertIntoLibrary,
+  inventorySummaryText,
+  isNearDuplicateByIngredients,
+} from '../recipes/library';
+import { rankCandidates, shouldReuse } from '../recipes/scoring';
 
 const router = Router();
 
@@ -161,7 +169,7 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
       return res.status(400).json({ message: 'user is required' });
     }
 
-    const inventoryList = inventory.map((i: any) => `${i.quantity} ${i.name}`).join(', ');
+    const inventoryList = inventorySummaryText(inventory);
 
     const servings = Math.max(1, Math.round(prefs?.servings ?? user.householdSize ?? 1));
     const maxTimeMinutes = Math.max(10, Math.round(prefs?.maxTimeMinutes ?? user.maxCookingTime ?? 60));
@@ -169,6 +177,52 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
     const cravings = (prefs?.cravings || '').toString().trim();
     const mustIncludeIngredient = (prefs?.mustIncludeIngredient || '').toString().trim();
 
+    // 1) Retrieve + rank from recipe library
+    const candidates = await fetchLibraryCandidates({
+      mealType,
+      maxTotalTimeMinutes: maxTimeMinutes,
+      mustIncludeIngredient,
+      limit: 30,
+    });
+
+    const ranked = rankCandidates(candidates, inventory, user, {
+      servings,
+      maxTimeMinutes,
+      mealType,
+      cravings,
+      mustIncludeIngredient,
+    });
+
+    if (shouldReuse(ranked[0])) {
+      const top3 = ranked.slice(0, 3).map((c) => c.recipe);
+
+      // Track usage (best-effort; don't fail the request on analytics)
+      for (const r of top3) {
+        incrementUsage(r.id).catch(() => undefined);
+      }
+
+      const mapped = top3.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        ingredients: row.ingredients,
+        instructions: row.instructions,
+        prepTime: row.prep_time,
+        cookTime: row.cook_time,
+        calories: row.calories,
+        matchScore: Math.round((ranked.find((x) => x.recipe.id === row.id)?.inventoryCoverage ?? 0) * 100),
+        tags: [
+          ...(Array.isArray(row.diet_tags) ? row.diet_tags : []),
+          ...(row.meal_type ? [row.meal_type] : []),
+          ...(row.cuisine ? [row.cuisine] : []),
+          `serves ${row.servings || servings}`,
+        ].filter(Boolean),
+      }));
+
+      return res.json(mapped);
+    }
+
+    // 2) Generate (fallback)
     const prompt = `
 I have these ingredients: ${inventoryList}.
 My profile: ${JSON.stringify(user)}.
@@ -206,12 +260,50 @@ Return ONLY a valid JSON array with objects containing:
     const text = result.response.text();
 
     const parsed = JSON.parse(cleanJson(text));
-    const recipes = Array.isArray(parsed)
-      ? parsed.map((r: any) => ({
-          ...r,
-          id: randomId(),
-        }))
-      : [];
+    const generated = Array.isArray(parsed) ? parsed : [];
+
+    // 3) Pick best + dedupe before saving (best-effort)
+    // We treat "best" as max matchScore; fallback to first.
+    const best = generated
+      .slice()
+      .sort((a: any, b: any) => Number(b?.matchScore ?? 0) - Number(a?.matchScore ?? 0))[0];
+
+    if (best && typeof best === 'object') {
+      const ingredientNames = Array.isArray(best.ingredients)
+        ? best.ingredients.map((x: any) => x?.name).filter((n: any) => typeof n === 'string')
+        : [];
+
+      const isDup = await isNearDuplicateByIngredients({ ingredientNames, threshold: 0.85, limit: 30 });
+
+      if (!isDup) {
+        const inserted = await insertIntoLibrary({
+          title: String(best.title || '').trim() || 'Untitled recipe',
+          description: typeof best.description === 'string' ? best.description : null,
+          ingredients: Array.isArray(best.ingredients) ? best.ingredients : [],
+          instructions: Array.isArray(best.instructions) ? best.instructions : [],
+          prepTime: Number.isFinite(best.prepTime) ? Number(best.prepTime) : null,
+          cookTime: Number.isFinite(best.cookTime) ? Number(best.cookTime) : null,
+          calories: Number.isFinite(best.calories) ? Number(best.calories) : null,
+          servings,
+          mealType: mealType !== 'any' ? mealType : null,
+          dietTags: Array.isArray(user?.dietaryRestrictions) ? user.dietaryRestrictions : [],
+          allergens: Array.isArray(user?.allergies) ? user.allergies : [],
+          source: 'generated',
+          createdByUserId: req.user?.id || null,
+        });
+
+        if (inserted?.id) {
+          // Replace the best candidate's id with the stable library id.
+          best.id = inserted.id;
+        }
+      }
+    }
+
+    // Always return 3 recipes to match the existing client expectation.
+    const recipes = generated.slice(0, 3).map((r: any) => ({
+      ...r,
+      id: r?.id || randomId(),
+    }));
 
     return res.json(recipes);
   } catch (err) {
