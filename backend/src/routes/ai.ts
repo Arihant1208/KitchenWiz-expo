@@ -119,8 +119,9 @@ async function getRecipeForSlot(params: {
   mealType: string;
   maxTimeMinutes: number;
   servings: number;
+  usedRecipeIds: Set<string>;
 }): Promise<any> {
-  const { req, inventory, user, mealType, maxTimeMinutes, servings } = params;
+  const { req, inventory, user, mealType, maxTimeMinutes, servings, usedRecipeIds } = params;
 
   const candidates = await fetchLibraryCandidates({
     mealType,
@@ -137,11 +138,16 @@ async function getRecipeForSlot(params: {
     mustIncludeIngredient: '',
   });
 
-  if (shouldReuse(ranked[0])) {
-    const top = ranked[0];
+  const reusable = ranked.filter((c) => shouldReuse(c));
+  const reusableUnused = reusable.find((c) => !usedRecipeIds.has(c.recipe.id));
+  const chosenReusable = reusableUnused ?? reusable[0];
+
+  if (chosenReusable) {
+    const top = chosenReusable;
     incrementUsage(top.recipe.id).catch(() => undefined);
     const mapped = mapLibraryRowToRecipe(top.recipe, servings);
     mapped.matchScore = Math.round(top.inventoryCoverage * 100);
+    usedRecipeIds.add(top.recipe.id);
     return mapped;
   }
 
@@ -205,10 +211,10 @@ Return ONLY a valid JSON object with:
     }
   }
 
-  return {
-    ...recipe,
-    id: recipe.id || randomId(),
-  };
+  const finalId = String(recipe.id || randomId());
+  usedRecipeIds.add(finalId);
+
+  return { ...recipe, id: finalId };
 }
 
 router.use(async (req: any, res: Response, next) => {
@@ -449,6 +455,9 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
     const days: any[] = [];
 
     // Per-slot gate: reuse library recipes when good enough; generate only when needed.
+    // Also avoid repeats across the week by tracking used recipe ids.
+    const usedRecipeIds = new Set<string>();
+
     for (const dayName of week) {
       const breakfast = await getRecipeForSlot({
         req,
@@ -457,6 +466,7 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
         mealType: 'breakfast',
         maxTimeMinutes,
         servings,
+        usedRecipeIds,
       });
 
       const lunch = await getRecipeForSlot({
@@ -466,6 +476,7 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
         mealType: 'lunch',
         maxTimeMinutes,
         servings,
+        usedRecipeIds,
       });
 
       const dinner = await getRecipeForSlot({
@@ -475,6 +486,7 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
         mealType: 'dinner',
         maxTimeMinutes,
         servings,
+        usedRecipeIds,
       });
 
       days.push({

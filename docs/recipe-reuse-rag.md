@@ -104,6 +104,18 @@ Why:
 
 ---
 
+## Weekly meal plans: reuse-first + rotate (no repeats)
+
+For `POST /api/ai/weekly-meal-plan`, we apply the same retrieval → ranking → reuse-gate flow per meal slot (breakfast/lunch/dinner) per day, but with one additional UX constraint: avoid repeating the exact same recipe across the week.
+
+Implementation detail:
+- Maintain a `usedRecipeIds` set during a single weekly-plan request.
+- When selecting a reusable recipe for a slot, prefer the highest-ranked candidate that passes the reuse gate AND is not in `usedRecipeIds`.
+- If all reusable candidates are already used, reuse the best available candidate (allow repeats) rather than forcing generation.
+- When a recipe is chosen (reused or newly generated), add its ID to `usedRecipeIds` so later slots/days can rotate when possible.
+
+---
+
 ## Deduplication
 
 Before saving generated recipes:
