@@ -92,6 +92,125 @@ function getModel() {
   return cachedModel;
 }
 
+function mapLibraryRowToRecipe(row: any, fallbackServings: number) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    ingredients: row.ingredients,
+    instructions: row.instructions,
+    prepTime: row.prep_time,
+    cookTime: row.cook_time,
+    calories: row.calories,
+    matchScore: 0,
+    tags: [
+      ...(Array.isArray(row.diet_tags) ? row.diet_tags : []),
+      ...(row.meal_type ? [row.meal_type] : []),
+      ...(row.cuisine ? [row.cuisine] : []),
+      `serves ${row.servings || fallbackServings}`,
+    ].filter(Boolean),
+  };
+}
+
+async function getRecipeForSlot(params: {
+  req: any;
+  inventory: any[];
+  user: any;
+  mealType: string;
+  maxTimeMinutes: number;
+  servings: number;
+}): Promise<any> {
+  const { req, inventory, user, mealType, maxTimeMinutes, servings } = params;
+
+  const candidates = await fetchLibraryCandidates({
+    mealType,
+    maxTotalTimeMinutes: maxTimeMinutes,
+    mustIncludeIngredient: '',
+    limit: 30,
+  });
+
+  const ranked = rankCandidates(candidates, inventory, user, {
+    servings,
+    maxTimeMinutes,
+    mealType,
+    cravings: '',
+    mustIncludeIngredient: '',
+  });
+
+  if (shouldReuse(ranked[0])) {
+    const top = ranked[0];
+    incrementUsage(top.recipe.id).catch(() => undefined);
+    const mapped = mapLibraryRowToRecipe(top.recipe, servings);
+    mapped.matchScore = Math.round(top.inventoryCoverage * 100);
+    return mapped;
+  }
+
+  const inventoryList = inventorySummaryText(inventory);
+  const prompt = `
+I have these ingredients: ${inventoryList}.
+My profile: ${JSON.stringify(user)}.
+
+Create ONE recipe suitable for ${mealType}.
+- Servings: ${servings}
+- Max total time (prep + cook): ${maxTimeMinutes} minutes
+
+Take into account my cuisine preferences (${user.cuisinePreferences?.join(', ') || 'Any'}), dietary restrictions (${user.dietaryRestrictions?.join(', ') || 'None'}), and allergies (${user.allergies?.join(', ') || 'None'}).
+Prioritize using my existing ingredients.
+
+Return ONLY a valid JSON object with:
+- title (string)
+- description (string)
+- ingredients (array of {name: string, amount: string})
+- instructions (array of strings)
+- prepTime (number in minutes)
+- cookTime (number in minutes)
+- calories (number)
+`;
+
+  const model = getModel();
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  const parsed = JSON.parse(cleanJson(text));
+
+  const recipe = typeof parsed === 'object' && parsed ? parsed : null;
+  if (!recipe) {
+    throw new Error('Invalid recipe generated');
+  }
+
+  // Best-effort store with dedupe (still return even if insert fails)
+  const ingredientNames = Array.isArray(recipe.ingredients)
+    ? recipe.ingredients.map((x: any) => x?.name).filter((n: any) => typeof n === 'string')
+    : [];
+
+  const isDup = await isNearDuplicateByIngredients({ ingredientNames, threshold: 0.85, limit: 30 });
+  if (!isDup) {
+    const inserted = await insertIntoLibrary({
+      title: String(recipe.title || '').trim() || 'Untitled recipe',
+      description: typeof recipe.description === 'string' ? recipe.description : null,
+      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+      instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+      prepTime: Number.isFinite(recipe.prepTime) ? Number(recipe.prepTime) : null,
+      cookTime: Number.isFinite(recipe.cookTime) ? Number(recipe.cookTime) : null,
+      calories: Number.isFinite(recipe.calories) ? Number(recipe.calories) : null,
+      servings,
+      mealType: mealType || null,
+      dietTags: Array.isArray(user?.dietaryRestrictions) ? user.dietaryRestrictions : [],
+      allergens: Array.isArray(user?.allergies) ? user.allergies : [],
+      source: 'generated',
+      createdByUserId: req.user?.id || null,
+    });
+
+    if (inserted?.id) {
+      recipe.id = inserted.id;
+    }
+  }
+
+  return {
+    ...recipe,
+    id: recipe.id || randomId(),
+  };
+}
+
 router.use(async (req: any, res: Response, next) => {
   try {
     const userId = req.user?.id;
@@ -323,40 +442,48 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
       return res.status(400).json({ message: 'inventory is required' });
     }
 
-    const inventoryList = inventory.map((i: any) => i.name).join(', ');
+    const maxTimeMinutes = Math.max(10, Math.round(user.maxCookingTime || 60));
+    const servings = Math.max(1, Math.round(user.householdSize || 1));
 
-    const prompt = `
-Create a 7-day meal plan (Monday to Sunday) for a user with these attributes:
-- Goals: ${user.goals}
-- Diet: ${(user.dietaryRestrictions || []).join(', ') || 'None'}
-- Cuisines: ${user.cuisinePreferences?.join(', ') || 'Any'}
-- Max Cooking Time: ${user.maxCookingTime || 60} minutes per meal
+    const week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const days: any[] = [];
 
-Available Ingredients: ${inventoryList || 'None specified'}.
-Prioritize using available ingredients to reduce waste.
+    // Per-slot gate: reuse library recipes when good enough; generate only when needed.
+    for (const dayName of week) {
+      const breakfast = await getRecipeForSlot({
+        req,
+        inventory,
+        user,
+        mealType: 'breakfast',
+        maxTimeMinutes,
+        servings,
+      });
 
-For each meal, provide a complete recipe with ingredients and instructions.
+      const lunch = await getRecipeForSlot({
+        req,
+        inventory,
+        user,
+        mealType: 'lunch',
+        maxTimeMinutes,
+        servings,
+      });
 
-Return ONLY a valid JSON array with 7 objects containing:
-- day (string: Monday, Tuesday, etc.)
-- breakfast (object with: id, title, description, ingredients (array of objects with name and amount), instructions (array of strings), prepTime (number), cookTime (number), calories (number))
-- lunch (same full recipe object)
-- dinner (same full recipe object)
-`;
+      const dinner = await getRecipeForSlot({
+        req,
+        inventory,
+        user,
+        mealType: 'dinner',
+        maxTimeMinutes,
+        servings,
+      });
 
-    const model = getModel();
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    const plan = JSON.parse(cleanJson(text));
-    const days = Array.isArray(plan)
-      ? plan.map((day: any) => ({
-          ...day,
-          breakfast: day.breakfast ? { ...day.breakfast, id: randomId() } : undefined,
-          lunch: day.lunch ? { ...day.lunch, id: randomId() } : undefined,
-          dinner: day.dinner ? { ...day.dinner, id: randomId() } : undefined,
-        }))
-      : [];
+      days.push({
+        day: dayName,
+        breakfast: breakfast ? { ...breakfast, id: breakfast.id || randomId() } : undefined,
+        lunch: lunch ? { ...lunch, id: lunch.id || randomId() } : undefined,
+        dinner: dinner ? { ...dinner, id: dinner.id || randomId() } : undefined,
+      });
+    }
 
     return res.json(days);
   } catch (err) {
