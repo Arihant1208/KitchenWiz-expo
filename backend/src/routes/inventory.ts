@@ -1,5 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { query } from '../db';
+import { mapInventoryRow } from '../mappers';
 
 const router = Router();
 
@@ -10,18 +11,11 @@ router.get('/', async (req: any, res: Response) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
     const result = await query(
-      'SELECT * FROM inventory_items WHERE user_id = $1 ORDER BY created_at DESC', 
+      'SELECT * FROM inventory_items WHERE user_id = $1 ORDER BY created_at DESC',
       [userId]
     );
-    const items = result.rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      quantity: row.quantity,
-      category: row.category,
-      expiryDate: row.expiry_date,
-      caloriesPerUnit: row.calories_per_unit
-    }));
-    res.json({ items });
+    const items = result.rows.map(mapInventoryRow);
+    return res.json({ items });
   } catch (err) {
     req.log.error({ err }, 'Get inventory failed');
     res.status(500).json({ error: 'Internal Server Error' });
@@ -30,11 +24,11 @@ router.get('/', async (req: any, res: Response) => {
 
 // Add single item to inventory
 router.post('/', async (req: any, res: Response) => {
-  const { name, quantity, category, expiryDate, caloriesPerUnit } = req.body;
-  
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { name, quantity, category, expiryDate, caloriesPerUnit } = req.body;
 
     const result = await query(
       `INSERT INTO inventory_items (user_id, name, quantity, category, expiry_date, calories_per_unit)
@@ -42,14 +36,7 @@ router.post('/', async (req: any, res: Response) => {
        RETURNING *`,
       [userId, name, quantity, category, expiryDate, caloriesPerUnit]
     );
-    res.json({
-      id: result.rows[0].id,
-      name: result.rows[0].name,
-      quantity: result.rows[0].quantity,
-      category: result.rows[0].category,
-      expiryDate: result.rows[0].expiry_date,
-      caloriesPerUnit: result.rows[0].calories_per_unit
-    });
+    return res.json(mapInventoryRow(result.rows[0]));
   } catch (err) {
     req.log.error({ err }, 'Add inventory item failed');
     res.status(500).json({ error: 'Failed to add item' });
@@ -58,12 +45,12 @@ router.post('/', async (req: any, res: Response) => {
 
 // Update inventory item
 router.put('/:id', async (req: any, res: Response) => {
-  const { id } = req.params;
-  const { name, quantity, category, expiryDate, caloriesPerUnit } = req.body;
-  
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { id } = req.params;
+    const { name, quantity, category, expiryDate, caloriesPerUnit } = req.body;
 
     const result = await query(
       `UPDATE inventory_items 
@@ -77,17 +64,10 @@ router.put('/:id', async (req: any, res: Response) => {
       return res.status(404).json({ error: 'Item not found' });
     }
     
-    res.json({
-      id: result.rows[0].id,
-      name: result.rows[0].name,
-      quantity: result.rows[0].quantity,
-      category: result.rows[0].category,
-      expiryDate: result.rows[0].expiry_date,
-      caloriesPerUnit: result.rows[0].calories_per_unit
-    });
+    return res.json(mapInventoryRow(result.rows[0]));
   } catch (err) {
     req.log.error({ err }, 'Update inventory item failed');
-    res.status(500).json({ error: 'Failed to update item' });
+    return res.status(500).json({ error: 'Failed to update item' });
   }
 });
 

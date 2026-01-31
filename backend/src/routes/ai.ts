@@ -1,282 +1,47 @@
+/**
+ * AI Routes
+ *
+ * Endpoints for AI-powered features: recipe generation, receipt parsing,
+ * meal planning, shopping lists, and chat.
+ */
+
 import { Router, Response } from 'express';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { query } from '../db';
+import { DAILY_AI_REQUEST_LIMIT } from '../constants';
+import { randomId } from '../helpers';
 import {
-  fetchLibraryCandidates,
-  incrementUsage,
-  insertIntoLibrary,
-  inventorySummaryText,
-  isNearDuplicateByIngredients,
-} from '../recipes/library';
-import { rankCandidates, shouldReuse } from '../recipes/scoring';
-import {
-  createWeeklyContext,
-  updateWeeklyContext,
-  applyWeeklyOptimization,
-  type WeeklyContext,
-} from '../recipes/weeklyOptimizer';
+  generateJson,
+  generateText,
+  chat as aiChat,
+  checkAndIncrementQuota,
+  generateRecipesFromInventory,
+  generateWeeklyMealPlan,
+} from '../services';
+import { inventorySummaryText } from '../recipes/library';
+import { safePositiveInt } from '../helpers/validation';
 
 const router = Router();
 
-const DAILY_AI_REQUEST_LIMIT = 20;
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-function randomId() {
-  return Math.random().toString(36).substring(7);
-}
-
-function cleanJson(text: string) {
-  return text.replace(/```json\n?|\n?```/g, '').trim();
-}
-
-function getLocalDayKey(req: any): string {
-  const timeZoneHeader = (req.header('x-client-timezone') || '').toString().trim();
-  if (timeZoneHeader) {
-    try {
-      const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timeZoneHeader,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).formatToParts(new Date());
-
-      const year = parts.find((p) => p.type === 'year')?.value;
-      const month = parts.find((p) => p.type === 'month')?.value;
-      const day = parts.find((p) => p.type === 'day')?.value;
-
-      if (year && month && day) {
-        return `${year}-${month}-${day}`;
-      }
-    } catch {
-      // Invalid timezone; fall through.
-    }
-  }
-
-  const offsetHeader = (req.header('x-client-tz-offset-minutes') || '').toString().trim();
-  const offsetMinutes = Number.parseInt(offsetHeader, 10);
-  if (Number.isFinite(offsetMinutes)) {
-    const localNow = new Date(Date.now() - offsetMinutes * 60_000);
-    return localNow.toISOString().slice(0, 10);
-  }
-
-  return new Date().toISOString().slice(0, 10); // UTC fallback
-}
-
-async function incrementDailyUsage(userId: string, dayKey: string): Promise<number> {
-  const result = await query(
-    `WITH upsert AS (
-      INSERT INTO ai_usage_daily (user_id, day, requests_count)
-      VALUES ($1, $2::date, 1)
-      ON CONFLICT (user_id, day)
-      DO UPDATE SET requests_count = ai_usage_daily.requests_count + 1, updated_at = NOW()
-      RETURNING requests_count
-    )
-    SELECT requests_count FROM upsert`,
-    [userId, dayKey]
-  );
-
-  return Number(result.rows?.[0]?.requests_count ?? 0);
-}
-
-let cachedModel: ReturnType<GoogleGenerativeAI['getGenerativeModel']> | null = null;
-let cachedApiKey: string | null = null;
-let cachedModelName: string | null = null;
-
-function getModel() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('Missing GEMINI_API_KEY env var');
-  }
-
-  if (!cachedModel || cachedApiKey !== apiKey || cachedModelName !== DEFAULT_MODEL) {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    cachedModel = genAI.getGenerativeModel({ model: DEFAULT_MODEL });
-    cachedApiKey = apiKey;
-    cachedModelName = DEFAULT_MODEL;
-  }
-
-  return cachedModel;
-}
-
-function mapLibraryRowToRecipe(row: any, fallbackServings: number) {
-  return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    ingredients: row.ingredients,
-    instructions: row.instructions,
-    prepTime: row.prep_time,
-    cookTime: row.cook_time,
-    calories: row.calories,
-    matchScore: 0,
-    tags: [
-      ...(Array.isArray(row.diet_tags) ? row.diet_tags : []),
-      ...(row.meal_type ? [row.meal_type] : []),
-      ...(row.cuisine ? [row.cuisine] : []),
-      `serves ${row.servings || fallbackServings}`,
-    ].filter(Boolean),
-  };
-}
-
-async function getRecipeForSlot(params: {
-  req: any;
-  inventory: any[];
-  user: any;
-  mealType: string;
-  maxTimeMinutes: number;
-  servings: number;
-  weeklyContext: WeeklyContext;
-  slotIndex: number;
-}): Promise<any> {
-  const { req, inventory, user, mealType, maxTimeMinutes, servings, weeklyContext, slotIndex } = params;
-
-  const candidates = await fetchLibraryCandidates({
-    mealType,
-    maxTotalTimeMinutes: maxTimeMinutes,
-    mustIncludeIngredient: '',
-    limit: 30,
-  });
-
-  const ranked = rankCandidates(candidates, inventory, user, {
-    servings,
-    maxTimeMinutes,
-    mealType,
-    cravings: '',
-    mustIncludeIngredient: '',
-  });
-
-  // Apply weekly optimization (variety, effort balance, ingredient reuse)
-  const optimized = applyWeeklyOptimization(ranked, weeklyContext, slotIndex);
-
-  const reusable = optimized.filter((c) => shouldReuse(c) && !weeklyContext.usedRecipeIds.has(c.recipe.id));
-  const chosenReusable = reusable[0]; // Best candidate after weekly optimization
-
-  if (chosenReusable) {
-    const top = chosenReusable;
-    incrementUsage(top.recipe.id).catch(() => undefined);
-    const mapped = mapLibraryRowToRecipe(top.recipe, servings);
-    mapped.matchScore = Math.round(top.inventoryCoverage * 100);
-    
-    // Update weekly context with selected recipe
-    updateWeeklyContext(weeklyContext, top.recipe);
-
-    req.log.info(
-      {
-        action: 'weekly_meal_plan_slot',
-        mealType,
-        mode: 'reuse',
-        slotIndex,
-        recipeId: top.recipe.id,
-        varietyAdjusted: true,
-      },
-      'Selected recipe for slot'
-    );
-    return mapped;
-  }
-
-  const inventoryList = inventorySummaryText(inventory);
-  const prompt = `
-I have these ingredients: ${inventoryList}.
-My profile: ${JSON.stringify(user)}.
-
-Create ONE recipe suitable for ${mealType}.
-- Servings: ${servings}
-- Max total time (prep + cook): ${maxTimeMinutes} minutes
-
-Take into account my cuisine preferences (${user.cuisinePreferences?.join(', ') || 'Any'}), dietary restrictions (${user.dietaryRestrictions?.join(', ') || 'None'}), and allergies (${user.allergies?.join(', ') || 'None'}).
-Prioritize using my existing ingredients.
-
-Return ONLY a valid JSON object with:
-- title (string)
-- description (string)
-- ingredients (array of {name: string, amount: string})
-- instructions (array of strings)
-- prepTime (number in minutes)
-- cookTime (number in minutes)
-- calories (number)
-`;
-
-  req.log.info(
-    {
-      action: 'weekly_meal_plan_slot',
-      mealType,
-      mode: 'generate',
-      maxTimeMinutes,
-      servings,
-    },
-    'Generating recipe for slot'
-  );
-
-  const model = getModel();
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  const parsed = JSON.parse(cleanJson(text));
-
-  const recipe = typeof parsed === 'object' && parsed ? parsed : null;
-  if (!recipe) {
-    throw new Error('Invalid recipe generated');
-  }
-
-  // Best-effort store with dedupe (still return even if insert fails)
-  const ingredientNames = Array.isArray(recipe.ingredients)
-    ? recipe.ingredients.map((x: any) => x?.name).filter((n: any) => typeof n === 'string')
-    : [];
-
-  const isDup = await isNearDuplicateByIngredients({ ingredientNames, threshold: 0.85, limit: 30 });
-  if (!isDup) {
-    const inserted = await insertIntoLibrary({
-      title: String(recipe.title || '').trim() || 'Untitled recipe',
-      description: typeof recipe.description === 'string' ? recipe.description : null,
-      ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-      instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
-      prepTime: Number.isFinite(recipe.prepTime) ? Number(recipe.prepTime) : null,
-      cookTime: Number.isFinite(recipe.cookTime) ? Number(recipe.cookTime) : null,
-      calories: Number.isFinite(recipe.calories) ? Number(recipe.calories) : null,
-      servings,
-      mealType: mealType || null,
-      dietTags: Array.isArray(user?.dietaryRestrictions) ? user.dietaryRestrictions : [],
-      allergens: Array.isArray(user?.allergies) ? user.allergies : [],
-      source: 'generated',
-      createdByUserId: req.user?.id || null,
-    });
-
-    if (inserted?.id) {
-      recipe.id = inserted.id;
-    }
-  }
-
-  const finalId = String(recipe.id || randomId());
-  
-  // Update weekly context with generated recipe
-  updateWeeklyContext(weeklyContext, {
-    id: finalId,
-    ingredients: recipe.ingredients || [],
-    prep_time: recipe.prepTime,
-    cook_time: recipe.cookTime,
-    cuisine: null, // Generated recipes don't have cuisine extracted yet
-  });
-
-  return { ...recipe, id: finalId };
-}
+// ---------------------------------------------------------------------------
+// Quota Middleware
+// ---------------------------------------------------------------------------
 
 router.use(async (req: any, res: Response, next) => {
   try {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-    const dayKey = getLocalDayKey(req);
-    const count = await incrementDailyUsage(userId, dayKey);
+    const quota = await checkAndIncrementQuota(userId, req);
 
-    if (count > DAILY_AI_REQUEST_LIMIT) {
+    if (quota.exceeded) {
       return res.status(429).json({
         message: 'Daily AI request quota exceeded',
         code: 'DAILY_QUOTA_EXCEEDED',
-        limit: DAILY_AI_REQUEST_LIMIT,
-        day: dayKey,
+        limit: quota.limit,
+        day: quota.day,
       });
     }
 
-    req.aiQuota = { used: count, limit: DAILY_AI_REQUEST_LIMIT, day: dayKey };
+    req.aiQuota = quota;
     return next();
   } catch (err) {
     req.log.error({ err, action: 'ai_quota_check' }, 'AI quota check failed');
@@ -284,9 +49,14 @@ router.use(async (req: any, res: Response, next) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Receipt Parsing
+// ---------------------------------------------------------------------------
+
 router.post('/receipt-parse', async (req: any, res: Response) => {
   try {
     const { base64Data, mimeType } = req.body || {};
+
     if (!base64Data || typeof base64Data !== 'string') {
       return res.status(400).json({ message: 'base64Data is required' });
     }
@@ -297,25 +67,16 @@ a standard quantity (e.g., "1 unit", "500g"), and estimate an expiry date from t
 Return ONLY a valid JSON array with objects containing: name, quantity, category, expiryDate, caloriesPerUnit (optional number).
 Categories must be one of: produce, dairy, meat, pantry, frozen, other.`;
 
-    const model = getModel();
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: typeof mimeType === 'string' && mimeType.trim() ? mimeType : 'image/jpeg',
-          data: base64Data,
-        },
+    const data = await generateJson<any[]>({
+      prompt,
+      image: {
+        mimeType: typeof mimeType === 'string' && mimeType.trim() ? mimeType : 'image/jpeg',
+        data: base64Data,
       },
-      { text: prompt },
-    ]);
-
-    const text = result.response.text();
-    const data = JSON.parse(cleanJson(text));
+    });
 
     const items = Array.isArray(data)
-      ? data.map((item: any) => ({
-          ...item,
-          id: randomId(),
-        }))
+      ? data.map((item) => ({ ...item, id: randomId() }))
       : [];
 
     return res.json(items);
@@ -324,6 +85,10 @@ Categories must be one of: produce, dairy, meat, pantry, frozen, other.`;
     return res.status(500).json({ message: 'Failed to read receipt.' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Recipe Generation
+// ---------------------------------------------------------------------------
 
 router.post('/recipes-from-inventory', async (req: any, res: Response) => {
   try {
@@ -336,205 +101,32 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
       return res.status(400).json({ message: 'user is required' });
     }
 
-    const inventoryList = inventorySummaryText(inventory);
+    const normalizedPrefs = {
+      servings: safePositiveInt(prefs?.servings ?? user.householdSize, 1),
+      maxTimeMinutes: safePositiveInt(prefs?.maxTimeMinutes ?? user.maxCookingTime, 60),
+      mealType: (prefs?.mealType || 'any').toString().trim() || 'any',
+      cravings: (prefs?.cravings || '').toString().trim(),
+      mustIncludeIngredient: (prefs?.mustIncludeIngredient || '').toString().trim(),
+    };
 
-    const servings = Math.max(1, Math.round(prefs?.servings ?? user.householdSize ?? 1));
-    const maxTimeMinutes = Math.max(10, Math.round(prefs?.maxTimeMinutes ?? user.maxCookingTime ?? 60));
-    const mealType = (prefs?.mealType || 'any').toString().trim() || 'any';
-    const cravings = (prefs?.cravings || '').toString().trim();
-    const mustIncludeIngredient = (prefs?.mustIncludeIngredient || '').toString().trim();
-
-    // 1) Retrieve + rank from recipe library
-    const candidates = await fetchLibraryCandidates({
-      mealType,
-      maxTotalTimeMinutes: maxTimeMinutes,
-      mustIncludeIngredient,
-      limit: 30,
-    });
-
-    const ranked = rankCandidates(candidates, inventory, user, {
-      servings,
-      maxTimeMinutes,
-      mealType,
-      cravings,
-      mustIncludeIngredient,
-    });
-
-    // Enhanced telemetry: score distribution
-    if (ranked.length > 0) {
-      const scores = ranked.map((c) => c.compositeScore);
-      const topCandidate = ranked[0];
-      req.log.info(
-        {
-          action: 'recipe_ranking_telemetry',
-          candidateCount: ranked.length,
-          scoreDistribution: {
-            min: Math.min(...scores).toFixed(3),
-            max: Math.max(...scores).toFixed(3),
-            median: scores[Math.floor(scores.length / 2)]?.toFixed(3),
-          },
-          topCandidate: {
-            id: topCandidate.recipe.id,
-            compositeScore: topCandidate.compositeScore.toFixed(3),
-            inventoryCoverage: topCandidate.inventoryCoverage.toFixed(3),
-            preferenceScore: topCandidate.preferenceScore.toFixed(3),
-            qualityScore: topCandidate.qualityScore.toFixed(3),
-            missingCount: topCandidate.missingCount,
-          },
-        },
-        'Recipe ranking completed'
-      );
-    }
-
-    if (shouldReuse(ranked[0])) {
-      const top3 = ranked.slice(0, 3).map((c) => c.recipe);
-
-      // Track usage (best-effort; don't fail the request on analytics)
-      for (const r of top3) {
-        incrementUsage(r.id).catch(() => undefined);
-      }
-
-      req.log.info(
-        {
-          action: 'recipes_from_inventory',
-          mode: 'reuse',
-          selectedCount: top3.length,
-          recipeIds: top3.map((r: any) => r.id),
-        },
-        'Reusing recipes from library'
-      );
-
-      const mapped = top3.map((row: any) => ({
-        id: row.id,
-        title: row.title,
-        description: row.description,
-        ingredients: row.ingredients,
-        instructions: row.instructions,
-        prepTime: row.prep_time,
-        cookTime: row.cook_time,
-        calories: row.calories,
-        matchScore: Math.round((ranked.find((x) => x.recipe.id === row.id)?.inventoryCoverage ?? 0) * 100),
-        tags: [
-          ...(Array.isArray(row.diet_tags) ? row.diet_tags : []),
-          ...(row.meal_type ? [row.meal_type] : []),
-          ...(row.cuisine ? [row.cuisine] : []),
-          `serves ${row.servings || servings}`,
-        ].filter(Boolean),
-      }));
-
-      return res.json(mapped);
-    }
-
-    // Gate failure telemetry
-    const gateFailureReason = ranked.length === 0
-      ? 'no_candidates'
-      : ranked[0].compositeScore < 0.78
-        ? 'score_below_threshold'
-        : ranked[0].missingCount > 3
-          ? 'too_many_missing_ingredients'
-          : 'unknown';
-
-    req.log.info(
-      {
-        action: 'recipes_from_inventory',
-        mode: 'generate',
-        reason: gateFailureReason,
-        candidateCount: ranked.length,
-        topScore: ranked[0]?.compositeScore?.toFixed(3) ?? null,
-        topMissingCount: ranked[0]?.missingCount ?? null,
-      },
-      'Generating recipes from inventory'
+    const result = await generateRecipesFromInventory(
+      inventory,
+      user,
+      normalizedPrefs,
+      req.log,
+      req.user?.id
     );
 
-    // 2) Generate (fallback)
-    const prompt = `
-I have these ingredients: ${inventoryList}.
-My profile: ${JSON.stringify(user)}.
-
-Recipe preferences:
-- Servings (number of people): ${servings}
-- Max total time (prep + cook): ${maxTimeMinutes} minutes
-- Meal type: ${mealType}
-- Cravings / mood: ${cravings || 'None specified'}
-- Must include this ingredient if possible: ${mustIncludeIngredient || 'None'}
-
-Suggest 3 creative recipes that prioritize using my existing stock to reduce waste.
-Take into account my cuisine preferences (${user.cuisinePreferences?.join(', ') || 'Any'}), dietary restrictions (${user.dietaryRestrictions?.join(', ') || 'None'}), and allergies (${user.allergies?.join(', ') || 'None'}).
-Keep each recipe within the max total time (${maxTimeMinutes} minutes).
-If a meal type is provided (not "any"), make recipes appropriate for that meal type.
-If a must-include ingredient is provided, include it in each recipe when reasonable.
-Rate each recipe with a 'matchScore' (0-100) based on how many ingredients I already have vs need to buy.
-
-In the 'tags' array, include helpful short tags such as: cuisine, meal type, "serves ${servings}", cravings keywords (if any), and dietary-friendly tags when appropriate.
-
-Return ONLY a valid JSON array with objects containing:
-- title (string)
-- description (string)
-- ingredients (array of {name: string, amount: string})
-- instructions (array of strings)
-- prepTime (number in minutes)
-- cookTime (number in minutes)
-- calories (number)
-- matchScore (number 0-100)
-- tags (array of strings)
-`;
-
-    const model = getModel();
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    const parsed = JSON.parse(cleanJson(text));
-    const generated = Array.isArray(parsed) ? parsed : [];
-
-    // 3) Pick best + dedupe before saving (best-effort)
-    // We treat "best" as max matchScore; fallback to first.
-    const best = generated
-      .slice()
-      .sort((a: any, b: any) => Number(b?.matchScore ?? 0) - Number(a?.matchScore ?? 0))[0];
-
-    if (best && typeof best === 'object') {
-      const ingredientNames = Array.isArray(best.ingredients)
-        ? best.ingredients.map((x: any) => x?.name).filter((n: any) => typeof n === 'string')
-        : [];
-
-      const isDup = await isNearDuplicateByIngredients({ ingredientNames, threshold: 0.85, limit: 30 });
-
-      if (!isDup) {
-        const inserted = await insertIntoLibrary({
-          title: String(best.title || '').trim() || 'Untitled recipe',
-          description: typeof best.description === 'string' ? best.description : null,
-          ingredients: Array.isArray(best.ingredients) ? best.ingredients : [],
-          instructions: Array.isArray(best.instructions) ? best.instructions : [],
-          prepTime: Number.isFinite(best.prepTime) ? Number(best.prepTime) : null,
-          cookTime: Number.isFinite(best.cookTime) ? Number(best.cookTime) : null,
-          calories: Number.isFinite(best.calories) ? Number(best.calories) : null,
-          servings,
-          mealType: mealType !== 'any' ? mealType : null,
-          dietTags: Array.isArray(user?.dietaryRestrictions) ? user.dietaryRestrictions : [],
-          allergens: Array.isArray(user?.allergies) ? user.allergies : [],
-          source: 'generated',
-          createdByUserId: req.user?.id || null,
-        });
-
-        if (inserted?.id) {
-          // Replace the best candidate's id with the stable library id.
-          best.id = inserted.id;
-        }
-      }
-    }
-
-    // Always return 3 recipes to match the existing client expectation.
-    const recipes = generated.slice(0, 3).map((r: any) => ({
-      ...r,
-      id: r?.id || randomId(),
-    }));
-
-    return res.json(recipes);
+    return res.json(result.recipes);
   } catch (err) {
     req.log.error({ err, action: 'recipes_from_inventory' }, 'AI recipe generation failed');
     return res.status(500).json({ message: 'Failed to generate recipes.' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Weekly Meal Plan
+// ---------------------------------------------------------------------------
 
 router.post('/weekly-meal-plan', async (req: any, res: Response) => {
   try {
@@ -547,57 +139,7 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
       return res.status(400).json({ message: 'inventory is required' });
     }
 
-    const maxTimeMinutes = Math.max(10, Math.round(user.maxCookingTime || 60));
-    const servings = Math.max(1, Math.round(user.householdSize || 1));
-
-    const week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const days: any[] = [];
-
-    // Weekly context for variety optimization, effort balancing, ingredient reuse
-    const weeklyContext = createWeeklyContext(35); // Target 35 min avg effort per slot
-    let slotIndex = 0;
-
-    for (const dayName of week) {
-      const breakfast = await getRecipeForSlot({
-        req,
-        inventory,
-        user,
-        mealType: 'breakfast',
-        maxTimeMinutes,
-        servings,
-        weeklyContext,
-        slotIndex: slotIndex++,
-      });
-
-      const lunch = await getRecipeForSlot({
-        req,
-        inventory,
-        user,
-        mealType: 'lunch',
-        maxTimeMinutes,
-        servings,
-        weeklyContext,
-        slotIndex: slotIndex++,
-      });
-
-      const dinner = await getRecipeForSlot({
-        req,
-        inventory,
-        user,
-        mealType: 'dinner',
-        maxTimeMinutes,
-        servings,
-        weeklyContext,
-        slotIndex: slotIndex++,
-      });
-
-      days.push({
-        day: dayName,
-        breakfast: breakfast ? { ...breakfast, id: breakfast.id || randomId() } : undefined,
-        lunch: lunch ? { ...lunch, id: lunch.id || randomId() } : undefined,
-        dinner: dinner ? { ...dinner, id: dinner.id || randomId() } : undefined,
-      });
-    }
+    const days = await generateWeeklyMealPlan(inventory, user, req.log, req.user?.id);
 
     return res.json(days);
   } catch (err) {
@@ -605,6 +147,10 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
     return res.status(500).json({ message: 'Failed to generate meal plan.' });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Shopping List
+// ---------------------------------------------------------------------------
 
 router.post('/shopping-list', async (req: any, res: Response) => {
   try {
@@ -634,13 +180,10 @@ Return ONLY a valid JSON array with objects containing:
 - category (one of: produce, dairy, meat, pantry, frozen, other)
 `;
 
-    const model = getModel();
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const parsed = await generateJson<any[]>({ prompt });
 
-    const parsed = JSON.parse(cleanJson(text));
     const items = Array.isArray(parsed)
-      ? parsed.map((item: any) => ({
+      ? parsed.map((item) => ({
           ...item,
           id: randomId(),
           checked: false,
@@ -654,6 +197,10 @@ Return ONLY a valid JSON array with objects containing:
   }
 });
 
+// ---------------------------------------------------------------------------
+// Chat
+// ---------------------------------------------------------------------------
+
 router.post('/chat', async (req: any, res: Response) => {
   try {
     const { history, message } = req.body || {};
@@ -663,11 +210,7 @@ router.post('/chat', async (req: any, res: Response) => {
     }
 
     const safeHistory = Array.isArray(history) ? history : [];
-
-    const model = getModel();
-    const chat = model.startChat({ history: safeHistory });
-    const result = await chat.sendMessage(message);
-    const response = result.response.text();
+    const response = await aiChat(message, safeHistory);
 
     return res.json({ response });
   } catch (err) {

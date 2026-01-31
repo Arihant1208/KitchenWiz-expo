@@ -21,6 +21,66 @@ KitchenWiz is a smart kitchen assistant mobile app built with React Native (Expo
 - **Language**: TypeScript
 - **Database**: PostgreSQL
 - **ORM**: Raw SQL with `pg` driver
+- **Logging**: Pino + pino-http for structured logs
+- **AI**: Google Generative AI (Gemini)
+
+## Backend Project Structure
+
+The backend follows a layered architecture with clear separation of concerns:
+
+```
+backend/src/
+├── constants/           # Configuration values and limits
+│   └── index.ts        # DAILY_AI_REQUEST_LIMIT, MEAL_TYPES, etc.
+│
+├── helpers/            # Pure utility functions (no side effects)
+│   ├── index.ts        # Barrel export
+│   ├── ids.ts          # ID generation (randomId)
+│   ├── json.ts         # JSON parsing (cleanJson, parseLlmJson)
+│   ├── dates.ts        # Date utilities (getLocalDayKey)
+│   └── validation.ts   # Type guards and validators
+│
+├── mappers/            # Data transformation (DB row <-> API response)
+│   ├── index.ts        # Barrel export
+│   ├── recipe.ts       # Recipe mapping
+│   └── inventory.ts    # Inventory mapping
+│
+├── services/           # Business logic layer
+│   ├── index.ts        # Barrel export
+│   ├── ai.ts           # Gemini model management
+│   ├── quota.ts        # AI usage tracking
+│   └── recipeGeneration.ts  # Recipe retrieval/generation
+│
+├── recipes/            # Recipe domain logic
+│   ├── library.ts      # Recipe library CRUD
+│   ├── scoring.ts      # Ranking algorithms
+│   ├── taste.ts        # Taste embeddings
+│   ├── weeklyOptimizer.ts  # Weekly variety balancing
+│   └── normalize.ts    # Ingredient normalization
+│
+├── routes/             # Express route handlers (thin controllers)
+│   ├── ai.ts           # AI endpoints
+│   ├── auth.ts         # Authentication
+│   ├── inventory.ts    # Inventory CRUD
+│   ├── recipes.ts      # User recipes
+│   ├── interactions.ts # Taste signals
+│   └── ...
+│
+├── auth/               # Authentication logic
+├── db.ts               # Database connection
+├── logger.ts           # Pino configuration
+└── server.ts           # Express app setup
+```
+
+### Layer Responsibilities
+
+| Layer | Purpose | Example |
+|-------|---------|---------|
+| **Routes** | HTTP handling, input validation | `routes/ai.ts` |
+| **Services** | Business logic, orchestration | `services/recipeGeneration.ts` |
+| **Helpers** | Pure utility functions | `helpers/json.ts` |
+| **Mappers** | Data transformation | `mappers/recipe.ts` |
+| **Constants** | Configuration values | `constants/index.ts` |
 
 ## Project Structure
 
