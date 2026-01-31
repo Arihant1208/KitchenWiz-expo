@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { AuthSession, UserProfile } from '../types';
@@ -29,6 +30,7 @@ const GOALS = ['weight-loss', 'muscle-gain', 'maintenance', 'budget-friendly'] a
 const SKILLS = ['beginner', 'intermediate', 'advanced'] as const;
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, setUser, authSession, setAuthSession }) => {
+  const navigation = useNavigation();
   const [isEditing, setIsEditing] = useState(false);
   const [editedUser, setEditedUser] = useState<UserProfile>(user);
 
@@ -98,25 +100,31 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ user, setUser, aut
   return (
     <>
       <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => {
-            if (isEditing) {
-              handleSave();
-            } else {
-              setEditedUser(user);
-              setIsEditing(true);
-            }
-          }}
-        >
-          <Ionicons name={isEditing ? 'checkmark' : 'pencil'} size={20} color={Colors.primary} />
-          <Text style={styles.editButtonText}>{isEditing ? 'Save' : 'Edit'}</Text>
-        </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.screenHeader}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <TouchableOpacity
+            style={styles.headerAction}
+            onPress={() => {
+              if (isEditing) {
+                handleSave();
+              } else {
+                setEditedUser(user);
+                setIsEditing(true);
+              }
+            }}
+          >
+            <Ionicons name={isEditing ? 'checkmark' : 'pencil'} size={22} color={Colors.primary} />
+          </TouchableOpacity>
         </View>
 
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       {/* Summary */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryTopRow}>
@@ -432,6 +440,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    marginLeft: 12,
+  },
+  headerAction: {
+    padding: 4,
   },
   scroll: {
     flex: 1,

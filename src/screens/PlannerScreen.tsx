@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Ingredient, MealPlanDay, UserProfile, Recipe } from '../types';
@@ -29,6 +30,7 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
   mealPlan,
   setMealPlan,
 }) => {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
   const [selectedMeal, setSelectedMeal] = useState<Recipe | null>(null);
 
@@ -93,7 +95,7 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScrollView style={styles.scroll}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setSelectedMeal(null)}>
+          <TouchableOpacity style={styles.detailBackButton} onPress={() => setSelectedMeal(null)}>
             <Ionicons name="arrow-back" size={20} color={Colors.primary} />
             <Text style={styles.backText}>Back to Planner</Text>
           </TouchableOpacity>
@@ -161,17 +163,24 @@ export const PlannerScreen: React.FC<PlannerScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Meal Planner</Text>
-          <Text style={styles.subtitle}>Plan your week ahead</Text>
+      {/* Header */}
+      <View style={styles.screenHeader}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>Meal Planner</Text>
+          <Text style={styles.headerSubtitle}>Plan your week ahead</Text>
         </View>
         <Button onPress={handleGenerate} size="sm" isLoading={loading}>
-          <Ionicons name="sparkles" size={16} color="#fff" /> Generate
+          <Ionicons name="sparkles" size={16} color="#fff" />
         </Button>
       </View>
 
+      <View style={styles.content}>
       {mealPlan.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="calendar-outline" size={64} color={Colors.textMuted} />
@@ -213,6 +222,31 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  screenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitleWrap: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   scroll: {
     flex: 1,
@@ -346,7 +380,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontStyle: 'italic',
   },
-  backButton: {
+  detailBackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,

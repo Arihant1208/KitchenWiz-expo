@@ -11,6 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Ingredient, Recipe, RecipeGenerationPreferences, UserProfile } from '../types';
@@ -35,6 +36,7 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
   savedRecipes,
   setSavedRecipes,
 }) => {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [activeTab, setActiveTab] = useState<'discover' | 'saved'>('discover');
@@ -127,7 +129,7 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <ScrollView style={styles.scroll}>
-          <TouchableOpacity style={styles.backButton} onPress={() => setSelectedRecipe(null)}>
+          <TouchableOpacity style={styles.detailBackButton} onPress={() => setSelectedRecipe(null)}>
             <Ionicons name="arrow-back" size={20} color={Colors.primary} />
             <Text style={styles.backText}>Back to Recipes</Text>
           </TouchableOpacity>
@@ -269,6 +271,23 @@ export const RecipesScreen: React.FC<RecipesScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Discover Recipes</Text>
+        <TouchableOpacity
+          style={styles.headerAction}
+          onPress={openGenerateModal}
+        >
+          <Ionicons name="sparkles" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.content}>
         {/* Preferences Modal */}
       <Modal visible={showPrefsModal} animationType="slide" transparent>
@@ -453,6 +472,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    marginLeft: 12,
+  },
+  headerAction: {
+    padding: 4,
+  },
   scroll: {
     flex: 1,
   },
@@ -572,7 +612,7 @@ const styles = StyleSheet.create({
   modalBtn: {
     flex: 1,
   },
-  header: {
+  oldHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -694,7 +734,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   // Detail View
-  backButton: {
+  detailBackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 20,

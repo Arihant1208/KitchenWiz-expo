@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Colors } from "../constants/colors";
@@ -38,6 +39,7 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
   setShoppingList,
   mealPlan,
 }) => {
+  const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState<"stock" | "shopping">("stock");
   const [isScanning, setIsScanning] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -448,6 +450,23 @@ export const InventoryScreen: React.FC<InventoryScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Inventory</Text>
+        <TouchableOpacity
+          style={styles.headerAction}
+          onPress={() => setShowAddModal(true)}
+        >
+          <Ionicons name="add-circle" size={28} color={Colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       {/* Edit Modal */}
       <Modal visible={!!editingItem} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
@@ -734,6 +753,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  backButton: {
+    padding: 4,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    marginLeft: 12,
+  },
+  headerAction: {
+    padding: 4,
   },
   tabContainer: {
     flexDirection: "row",

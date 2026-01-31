@@ -3,24 +3,40 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { DashboardScreen } from './src/screens/DashboardScreen';
+import { HomeScreen } from './src/screens/HomeScreen';
 import { InventoryScreen } from './src/screens/InventoryScreen';
 import { RecipesScreen } from './src/screens/RecipesScreen';
+import { SavedRecipesScreen } from './src/screens/SavedRecipesScreen';
+import { RecipeDetailScreen } from './src/screens/RecipeDetailScreen';
 import { PlannerScreen } from './src/screens/PlannerScreen';
 import { AssistantScreen } from './src/screens/AssistantScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { ShoppingListScreen } from './src/screens/ShoppingListScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 
 import { Ingredient, UserProfile, MealPlanDay, Recipe, ShoppingItem, AuthSession } from './src/types';
 import { storage } from './src/services/storage';
-import { CustomTabBar } from './src/components/CustomTabBar';
 import { api, authEvents, authTokenStore } from './src/services/api';
 import { useAuthRefresh } from './src/services/useAuthRefresh';
 import { Colors } from './src/constants/colors';
 
-const Tab = createBottomTabNavigator();
+export type RootStackParamList = {
+  Home: undefined;
+  Inventory: undefined;
+  Recipes: undefined;
+  SavedRecipes: undefined;
+  RecipeDetail: { recipe: Recipe; isSaved: boolean };
+  Planner: undefined;
+  Assistant: undefined;
+  Profile: undefined;
+  Settings: undefined;
+  ShoppingList: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const DEFAULT_USER: UserProfile = {
   name: '',
@@ -262,26 +278,105 @@ export default function App() {
     <SafeAreaProvider>
       <NavigationContainer>
         <StatusBar style="dark" />
-        <Tab.Navigator
-          tabBar={props => <CustomTabBar {...props} />}
+        <Stack.Navigator
           screenOptions={{
             headerShown: false,
+            animation: 'slide_from_right',
           }}
         >
-          <Tab.Screen name="Dashboard">{() => <DashboardScreen inventory={inventory} />}</Tab.Screen>
-          <Tab.Screen name="Inventory">{() => <InventoryScreen items={inventory} setItems={setInventory} shoppingList={shoppingList} setShoppingList={setShoppingList} mealPlan={mealPlan} />}</Tab.Screen>
-          <Tab.Screen name="Recipes">{() => <RecipesScreen inventory={inventory} user={user} recipes={recipes} setRecipes={setRecipes} savedRecipes={savedRecipes} setSavedRecipes={setSavedRecipes} />}</Tab.Screen>
-          <Tab.Screen name="Planner">{() => <PlannerScreen user={user} inventory={inventory} mealPlan={mealPlan} setMealPlan={setMealPlan} />}</Tab.Screen>
-          <Tab.Screen
-            name="Assistant"
-            options={{
-              tabBarButton: () => null,
-            }}
-          >
+          <Stack.Screen name="Home">
+            {() => (
+              <HomeScreen
+                inventory={inventory}
+                recipes={recipes}
+                savedRecipes={savedRecipes}
+                mealPlan={mealPlan}
+                user={user}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Inventory">
+            {() => (
+              <InventoryScreen
+                items={inventory}
+                setItems={setInventory}
+                shoppingList={shoppingList}
+                setShoppingList={setShoppingList}
+                mealPlan={mealPlan}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Recipes">
+            {() => (
+              <RecipesScreen
+                inventory={inventory}
+                user={user}
+                recipes={recipes}
+                setRecipes={setRecipes}
+                savedRecipes={savedRecipes}
+                setSavedRecipes={setSavedRecipes}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="SavedRecipes">
+            {() => (
+              <SavedRecipesScreen
+                savedRecipes={savedRecipes}
+                setSavedRecipes={setSavedRecipes}
+                setRecipes={setRecipes}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="RecipeDetail">
+            {() => (
+              <RecipeDetailScreen
+                savedRecipes={savedRecipes}
+                setSavedRecipes={setSavedRecipes}
+                setRecipes={setRecipes}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Planner">
+            {() => (
+              <PlannerScreen
+                user={user}
+                inventory={inventory}
+                mealPlan={mealPlan}
+                setMealPlan={setMealPlan}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Assistant">
             {() => <AssistantScreen inventory={inventory} user={user} />}
-          </Tab.Screen>
-          <Tab.Screen name="Profile">{() => <ProfileScreen user={user} setUser={setUser} authSession={authSession} setAuthSession={setAuthSession} />}</Tab.Screen>
-        </Tab.Navigator>
+          </Stack.Screen>
+          <Stack.Screen name="Profile">
+            {() => (
+              <ProfileScreen
+                user={user}
+                setUser={setUser}
+                authSession={authSession}
+                setAuthSession={setAuthSession}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Settings">
+            {() => (
+              <SettingsScreen
+                authSession={authSession}
+                setAuthSession={setAuthSession}
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="ShoppingList">
+            {() => (
+              <ShoppingListScreen
+                shoppingList={shoppingList}
+                setShoppingList={setShoppingList}
+                mealPlan={mealPlan}
+              />
+            )}
+          </Stack.Screen>
+        </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
   );
