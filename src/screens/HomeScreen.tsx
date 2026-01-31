@@ -5,7 +5,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
   Dimensions,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,7 +16,8 @@ import { Colors } from '../constants/colors';
 import { Ingredient, Recipe, MealPlanDay, UserProfile } from '../types';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2;
+const RECIPE_CARD_WIDTH = width * 0.7;
+const SMALL_RECIPE_WIDTH = (width - 48) / 2;
 
 interface HomeScreenProps {
   inventory: Ingredient[];
@@ -23,17 +26,6 @@ interface HomeScreenProps {
   mealPlan: MealPlanDay[];
   user: UserProfile;
 }
-
-type FeatureCard = {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  color: string;
-  bgColor: string;
-  route: string;
-  badge?: string | number;
-};
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   inventory,
@@ -51,81 +43,99 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return 'Good evening';
   };
 
-  const getTodayMeals = () => {
-    const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-    return mealPlan.find(day => day.day === today);
-  };
+  // Get top recommended recipes (highest match score)
+  const topRecommended = [...recipes]
+    .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+    .slice(0, 5);
 
+  // Quick recipes (under 30 min)
+  const quickRecipes = recipes
+    .filter(r => ((r.prepTime || 0) + (r.cookTime || 0)) <= 30)
+    .slice(0, 4);
+
+  // Expiring ingredients count
   const expiringCount = inventory.filter(i => {
     const diff = new Date(i.expiryDate).getTime() - Date.now();
     return diff < 1000 * 3600 * 24 * 3 && diff > 0;
   }).length;
 
-  const todayMeals = getTodayMeals();
-  const plannedMealsCount = todayMeals
-    ? [todayMeals.breakfast, todayMeals.lunch, todayMeals.dinner].filter(Boolean).length
-    : 0;
+  // Expiring ingredients for recipe suggestions
+  const expiringIngredients = inventory
+    .filter(i => {
+      const diff = new Date(i.expiryDate).getTime() - Date.now();
+      return diff < 1000 * 3600 * 24 * 3 && diff > 0;
+    })
+    .slice(0, 3);
 
-  const featureCards: FeatureCard[] = [
-    {
-      id: 'inventory',
-      title: 'Inventory',
-      subtitle: `${inventory.length} items`,
-      icon: 'cube-outline',
-      color: '#10b981',
-      bgColor: '#ecfdf5',
-      route: 'Inventory',
-      badge: expiringCount > 0 ? expiringCount : undefined,
-    },
-    {
-      id: 'recipes',
-      title: 'Recipes',
-      subtitle: `${recipes.length} discovered`,
-      icon: 'restaurant-outline',
-      color: '#f59e0b',
-      bgColor: '#fffbeb',
-      route: 'Recipes',
-    },
-    {
-      id: 'planner',
-      title: 'Meal Planner',
-      subtitle: `${plannedMealsCount} meals today`,
-      icon: 'calendar-outline',
-      color: '#3b82f6',
-      bgColor: '#eff6ff',
-      route: 'Planner',
-    },
-    {
-      id: 'saved',
-      title: 'Saved Recipes',
-      subtitle: `${savedRecipes.length} favorites`,
-      icon: 'heart-outline',
-      color: '#ef4444',
-      bgColor: '#fef2f2',
-      route: 'SavedRecipes',
-    },
-  ];
+  const navigateToRecipeDetail = (recipe: Recipe) => {
+    const isSaved = savedRecipes.some(r => r.id === recipe.id);
+    navigation.navigate('RecipeDetail', { recipe, isSaved });
+  };
 
-  const quickActions = [
-    {
-      id: 'scan',
-      label: 'Scan Receipt',
-      icon: 'scan-outline' as keyof typeof Ionicons.glyphMap,
-      onPress: () => navigation.navigate('Inventory', { action: 'scan' }),
-    },
-    {
-      id: 'generate',
-      label: 'Generate Recipes',
-      icon: 'sparkles-outline' as keyof typeof Ionicons.glyphMap,
-      onPress: () => navigation.navigate('Recipes', { action: 'generate' }),
-    },
-    {
-      id: 'assistant',
-      label: 'AI Assistant',
-      icon: 'chatbubble-ellipses-outline' as keyof typeof Ionicons.glyphMap,
-      onPress: () => navigation.navigate('Assistant'),
-    },
-  ];
+  const renderFeaturedRecipe = ({ item, index }: { item: Recipe; index: number }) => (
+    <TouchableOpacity
+      style={[styles.featuredCard, index === 0 && { marginLeft: 16 }]}
+      activeOpacity={0.9}
+      onPress={() => navigateToRecipeDetail(item)}
+    >
+      <Image
+        source={{ uri: `https://picsum.photos/seed/${item.id}/400/250` }}
+        style={styles.featuredImage}
+      />
+      <View style={styles.featuredOverlay} />
+      <View style={styles.featuredContent}>
+        {item.matchScore !== undefined && item.matchScore > 0 && (
+          <View style={styles.matchBadge}>
+            <Ionicons name="checkmark-circle" size={12} color="#fff" />
+            <Text style={styles.matchText}>{item.matchScore}% match</Text>
+          </View>
+        )}
+        <Text style={styles.featuredTitle} numberOfLines={2}>{item.title}</Text>
+        <View style={styles.featuredMeta}>
+          <View style={styles.metaItem}>
+            <Ionicons name="time-outline" size={14} color="#fff" />
+            <Text style={styles.metaText}>
+              {(item.prepTime || 0) + (item.cookTime || 0)} min
+            </Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Ionicons name="flame-outline" size={14} color="#fff" />
+            <Text style={styles.metaText}>{item.calories || '—'} cal</Text>
+          </View>
+        </View>
+      </View>
+      <TouchableOpacity style={styles.saveButton}>
+        <Ionicons
+          name={savedRecipes.some(r => r.id === item.id) ? 'heart' : 'heart-outline'}
+          size={20}
+          color={savedRecipes.some(r => r.id === item.id) ? Colors.error : '#fff'}
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  const renderSmallRecipe = (recipe: Recipe) => (
+    <TouchableOpacity
+      key={recipe.id}
+      style={styles.smallRecipeCard}
+      activeOpacity={0.8}
+      onPress={() => navigateToRecipeDetail(recipe)}
+    >
+      <Image
+        source={{ uri: `https://picsum.photos/seed/${recipe.id}/200/150` }}
+        style={styles.smallRecipeImage}
+      />
+      <View style={styles.smallRecipeContent}>
+        <Text style={styles.smallRecipeTitle} numberOfLines={2}>{recipe.title}</Text>
+        <View style={styles.smallRecipeMeta}>
+          <Ionicons name="time-outline" size={12} color={Colors.textSecondary} />
+          <Text style={styles.smallRecipeMetaText}>
+            {(recipe.prepTime || 0) + (recipe.cookTime || 0)} min
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -137,115 +147,218 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Text style={styles.greeting}>{getGreeting()} 👋</Text>
-            <Text style={styles.userName}>{user.name || 'Chef'}</Text>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.userName}>{user.name || 'Chef'} 👨‍🍳</Text>
           </View>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Ionicons name="person-circle-outline" size={36} color={Colors.primary} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('SavedRecipes')}
+            >
+              <Ionicons name="heart" size={22} color={Colors.error} />
+              {savedRecipes.length > 0 && (
+                <View style={styles.headerBadge}>
+                  <Text style={styles.headerBadgeText}>{savedRecipes.length}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('Profile')}
+            >
+              <Ionicons name="person-circle-outline" size={28} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Today's Summary Card */}
-        {todayMeals && plannedMealsCount > 0 && (
-          <TouchableOpacity
-            style={styles.summaryCard}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('Planner')}
-          >
-            <View style={styles.summaryCardGradient}>
-              <View style={styles.summaryHeader}>
-                <View style={styles.summaryIconBg}>
-                  <Ionicons name="today-outline" size={20} color="#fff" />
-                </View>
-                <Text style={styles.summaryTitle}>Today's Plan</Text>
-              </View>
-              <View style={styles.mealsPreview}>
-                {todayMeals.breakfast && (
-                  <View style={styles.mealItem}>
-                    <Text style={styles.mealTime}>Breakfast</Text>
-                    <Text style={styles.mealName} numberOfLines={1}>
-                      {todayMeals.breakfast.title}
-                    </Text>
-                  </View>
-                )}
-                {todayMeals.lunch && (
-                  <View style={styles.mealItem}>
-                    <Text style={styles.mealTime}>Lunch</Text>
-                    <Text style={styles.mealName} numberOfLines={1}>
-                      {todayMeals.lunch.title}
-                    </Text>
-                  </View>
-                )}
-                {todayMeals.dinner && (
-                  <View style={styles.mealItem}>
-                    <Text style={styles.mealTime}>Dinner</Text>
-                    <Text style={styles.mealName} numberOfLines={1}>
-                      {todayMeals.dinner.title}
-                    </Text>
-                  </View>
-                )}
-              </View>
+        {/* Generate Recipes CTA */}
+        <TouchableOpacity
+          style={styles.generateCTA}
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Recipes')}
+        >
+          <View style={styles.generateContent}>
+            <View style={styles.generateIcon}>
+              <Ionicons name="sparkles" size={24} color="#fff" />
             </View>
+            <View style={styles.generateText}>
+              <Text style={styles.generateTitle}>Discover New Recipes</Text>
+              <Text style={styles.generateSubtitle}>
+                {inventory.length > 0
+                  ? `Based on your ${inventory.length} ingredients`
+                  : 'Add ingredients to get personalized suggestions'}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Expiring Ingredients Alert */}
+        {expiringCount > 0 && (
+          <TouchableOpacity
+            style={styles.expiringAlert}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate('Recipes')}
+          >
+            <View style={styles.expiringIcon}>
+              <Ionicons name="warning" size={18} color={Colors.warning} />
+            </View>
+            <View style={styles.expiringContent}>
+              <Text style={styles.expiringTitle}>
+                {expiringCount} ingredient{expiringCount > 1 ? 's' : ''} expiring soon
+              </Text>
+              <Text style={styles.expiringText}>
+                {expiringIngredients.map(i => i.name).join(', ')}
+                {expiringIngredients.length < expiringCount && '...'}
+              </Text>
+            </View>
+            <Text style={styles.expiringAction}>Use them →</Text>
           </TouchableOpacity>
         )}
 
-        {/* Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          {quickActions.map(action => (
-            <TouchableOpacity
-              key={action.id}
-              style={styles.quickAction}
-              activeOpacity={0.7}
-              onPress={action.onPress}
-            >
-              <View style={styles.quickActionIcon}>
-                <Ionicons name={action.icon} size={22} color={Colors.primary} />
+        {/* Top Recommended Recipes */}
+        {topRecommended.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Recommended for You</Text>
+                <Text style={styles.sectionSubtitle}>Based on your inventory</Text>
               </View>
-              <Text style={styles.quickActionLabel}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Feature Cards Grid */}
-        <Text style={styles.sectionTitle}>Your Kitchen</Text>
-        <View style={styles.cardsGrid}>
-          {featureCards.map(card => (
-            <TouchableOpacity
-              key={card.id}
-              style={[styles.featureCard, { backgroundColor: card.bgColor }]}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate(card.route)}
-            >
-              {card.badge !== undefined && (
-                <View style={styles.cardBadge}>
-                  <Text style={styles.cardBadgeText}>{card.badge}</Text>
-                </View>
-              )}
-              <View style={[styles.cardIconBg, { backgroundColor: card.color }]}>
-                <Ionicons name={card.icon} size={24} color="#fff" />
-              </View>
-              <Text style={[styles.cardTitle, { color: card.color }]}>{card.title}</Text>
-              <Text style={styles.cardSubtitle}>{card.subtitle}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Tips Section */}
-        <View style={styles.tipsCard}>
-          <View style={styles.tipsHeader}>
-            <Ionicons name="bulb-outline" size={20} color={Colors.warning} />
-            <Text style={styles.tipsTitle}>Quick Tip</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Recipes')}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={topRecommended}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={item => item.id}
+              renderItem={renderFeaturedRecipe}
+              contentContainerStyle={styles.featuredList}
+              snapToInterval={RECIPE_CARD_WIDTH + 12}
+              decelerationRate="fast"
+            />
           </View>
-          <Text style={styles.tipsText}>
-            {expiringCount > 0
-              ? `You have ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon. Generate recipes to use them up!`
-              : inventory.length > 0
-              ? 'Scan a receipt to quickly add items to your inventory.'
-              : 'Start by adding items to your inventory or scanning a receipt.'}
-          </Text>
+        )}
+
+        {/* Quick & Easy Section */}
+        {quickRecipes.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Quick & Easy</Text>
+                <Text style={styles.sectionSubtitle}>Ready in 30 minutes or less</Text>
+              </View>
+            </View>
+            <View style={styles.smallRecipeGrid}>
+              {quickRecipes.map(renderSmallRecipe)}
+            </View>
+          </View>
+        )}
+
+        {/* Empty State - No Recipes */}
+        {recipes.length === 0 && (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Ionicons name="restaurant-outline" size={48} color={Colors.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>No Recipes Yet</Text>
+            <Text style={styles.emptyText}>
+              Add ingredients to your inventory and we'll suggest delicious recipes you can make!
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={() => navigation.navigate('Inventory')}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.emptyButtonText}>Add Ingredients</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Saved Recipes Preview */}
+        {savedRecipes.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Your Favorites</Text>
+                <Text style={styles.sectionSubtitle}>{savedRecipes.length} saved recipes</Text>
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('SavedRecipes')}>
+                <Text style={styles.seeAll}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.savedScrollContent}
+            >
+              {savedRecipes.slice(0, 4).map(recipe => (
+                <TouchableOpacity
+                  key={recipe.id}
+                  style={styles.savedRecipeCard}
+                  activeOpacity={0.8}
+                  onPress={() => navigateToRecipeDetail(recipe)}
+                >
+                  <Image
+                    source={{ uri: `https://picsum.photos/seed/${recipe.id}/150/150` }}
+                    style={styles.savedRecipeImage}
+                  />
+                  <View style={styles.savedHeart}>
+                    <Ionicons name="heart" size={12} color={Colors.error} />
+                  </View>
+                  <Text style={styles.savedRecipeTitle} numberOfLines={2}>{recipe.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Quick Actions Row */}
+        <View style={styles.quickActionsSection}>
+          <Text style={styles.sectionTitleSmall}>Quick Actions</Text>
+          <View style={styles.quickActions}>
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => navigation.navigate('Inventory')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#ecfdf5' }]}>
+                <Ionicons name="cube-outline" size={22} color="#10b981" />
+              </View>
+              <Text style={styles.quickActionLabel}>Inventory</Text>
+              <Text style={styles.quickActionSub}>{inventory.length} items</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => navigation.navigate('Planner')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#eff6ff' }]}>
+                <Ionicons name="calendar-outline" size={22} color="#3b82f6" />
+              </View>
+              <Text style={styles.quickActionLabel}>Meal Plan</Text>
+              <Text style={styles.quickActionSub}>{mealPlan.length > 0 ? 'View plan' : 'Create'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => navigation.navigate('Assistant')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#fef3c7' }]}>
+                <Ionicons name="chatbubble-ellipses-outline" size={22} color="#f59e0b" />
+              </View>
+              <Text style={styles.quickActionLabel}>AI Chef</Text>
+              <Text style={styles.quickActionSub}>Ask anything</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickAction}
+              onPress={() => navigation.navigate('ShoppingList')}
+            >
+              <View style={[styles.quickActionIcon, { backgroundColor: '#fce7f3' }]}>
+                <Ionicons name="cart-outline" size={22} color="#ec4899" />
+              </View>
+              <Text style={styles.quickActionLabel}>Shopping</Text>
+              <Text style={styles.quickActionSub}>List</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -261,14 +374,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
     paddingBottom: 32,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   headerLeft: {
     flex: 1,
@@ -276,163 +390,367 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 14,
     color: Colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   userName: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: Colors.text,
   },
-  profileButton: {
-    padding: 4,
-  },
-  summaryCard: {
-    marginBottom: 24,
-    borderRadius: 20,
-    overflow: 'hidden',
-    ...Colors.shadow.medium,
-  },
-  summaryCardGradient: {
-    backgroundColor: Colors.primary,
-    padding: 20,
-  },
-  summaryHeader: {
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 8,
   },
-  summaryIconBg: {
-    width: 36,
-    height: 36,
+  headerButton: {
+    padding: 6,
+    position: 'relative',
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  headerBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  generateCTA: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    ...Colors.shadow.medium,
+  },
+  generateContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  generateIcon: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  summaryTitle: {
+  generateText: {
+    flex: 1,
+  },
+  generateTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  generateSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+  },
+  expiringAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.warningLight,
+    marginHorizontal: 16,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  expiringIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  expiringContent: {
+    flex: 1,
+  },
+  expiringTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  expiringText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  expiringAction: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.warning,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  sectionTitle: {
     fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  sectionTitleSmall: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  seeAll: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  featuredList: {
+    paddingRight: 16,
+  },
+  featuredCard: {
+    width: RECIPE_CARD_WIDTH,
+    height: 200,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginRight: 12,
+    ...Colors.shadow.medium,
+  },
+  featuredImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: Colors.borderLight,
+  },
+  featuredOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  featuredContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 14,
+  },
+  matchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    gap: 4,
+  },
+  matchText: {
+    fontSize: 11,
     fontWeight: '600',
     color: '#fff',
   },
-  mealsPreview: {
-    gap: 12,
+  featuredTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  mealItem: {
+  featuredMeta: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
-  mealTime: {
+  metaText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+  },
+  saveButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smallRecipeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  smallRecipeCard: {
+    width: SMALL_RECIPE_WIDTH,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    overflow: 'hidden',
+    ...Colors.shadow.small,
+  },
+  smallRecipeImage: {
+    width: '100%',
+    height: 100,
+    backgroundColor: Colors.borderLight,
+  },
+  smallRecipeContent: {
+    padding: 10,
+  },
+  smallRecipeTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  smallRecipeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  smallRecipeMetaText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  savedScrollContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  savedRecipeCard: {
+    width: 110,
+    alignItems: 'center',
+  },
+  savedRecipeImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: Colors.borderLight,
+    marginBottom: 8,
+  },
+  savedHeart: {
+    position: 'absolute',
+    top: 0,
+    right: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Colors.shadow.small,
+  },
+  savedRecipeTitle: {
     fontSize: 12,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.7)',
-    width: 70,
+    color: Colors.text,
+    textAlign: 'center',
   },
-  mealName: {
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    marginHorizontal: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    ...Colors.shadow.small,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  emptyText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#fff',
-    flex: 1,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
   },
-  quickActionsContainer: {
+  emptyButton: {
     flexDirection: 'row',
-    marginBottom: 28,
-    gap: 12,
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  quickActionsSection: {
+    marginTop: 8,
+  },
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 10,
   },
   quickAction: {
     flex: 1,
-    alignItems: 'center',
-    padding: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
     ...Colors.shadow.small,
   },
   quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: Colors.primaryLight,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
   quickActionLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 16,
-  },
-  cardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 24,
-  },
-  featureCard: {
-    width: CARD_WIDTH,
-    padding: 20,
-    borderRadius: 20,
-    position: 'relative',
-    ...Colors.shadow.small,
-  },
-  cardBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: Colors.warning,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  cardBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  cardIconBg: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  tipsCard: {
-    backgroundColor: Colors.warningLight,
-    padding: 16,
-    borderRadius: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.warning,
-  },
-  tipsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
-  },
-  tipsTitle: {
-    fontSize: 14,
     fontWeight: '600',
     color: Colors.text,
+    marginBottom: 2,
   },
-  tipsText: {
-    fontSize: 14,
+  quickActionSub: {
+    fontSize: 10,
     color: Colors.textSecondary,
-    lineHeight: 20,
   },
 });
