@@ -12,6 +12,7 @@ import mealPlanRoutes from "./routes/mealPlan";
 import shoppingListRoutes from "./routes/shoppingList";
 import emailVerificationRoutes from "./routes/emailVerification";
 import aiRoutes from "./routes/ai";
+import interactionsRoutes from "./routes/interactions";
 
 import { requireAuth } from "./auth/middleware";
 
@@ -70,6 +71,7 @@ app.use("/api/meal-plan", requireAuth, mealPlanRoutes);
 app.use("/api/shopping-list", requireAuth, shoppingListRoutes);
 app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/email-verification", emailVerificationRoutes);
+app.use("/api/interactions", requireAuth, interactionsRoutes);
 
 // Health Check
 app.get("/health", (req, res) => {

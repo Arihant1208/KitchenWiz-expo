@@ -197,6 +197,32 @@ CREATE TABLE IF NOT EXISTS ai_usage_daily (
     PRIMARY KEY (user_id, day)
 );
 
+-- User taste embeddings (latent preference vector for personalization)
+CREATE TABLE IF NOT EXISTS user_taste_embeddings (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    embedding JSONB NOT NULL DEFAULT '[]',
+    interaction_count INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Recipe embeddings (cached, computed from recipe metadata)
+CREATE TABLE IF NOT EXISTS recipe_embeddings (
+    recipe_id UUID PRIMARY KEY REFERENCES recipe_library(id) ON DELETE CASCADE,
+    embedding JSONB NOT NULL DEFAULT '[]',
+    computed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Interaction signals for taste learning
+CREATE TABLE IF NOT EXISTS interaction_signals (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    recipe_id UUID NOT NULL REFERENCES recipe_library(id) ON DELETE CASCADE,
+    signal_type TEXT NOT NULL CHECK (signal_type IN ('cooked', 'skipped', 'thumbs_up', 'thumbs_down', 'repeated', 'edited')),
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_inventory_user ON inventory_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_inventory_expiry ON inventory_items(expiry_date);
@@ -219,6 +245,11 @@ CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_refresh_expires ON refresh_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_verification_token ON email_verification_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_verification_user ON email_verification_tokens(user_id);
+
+-- Taste embedding indexes
+CREATE INDEX IF NOT EXISTS idx_interaction_signals_user_recipe ON interaction_signals(user_id, recipe_id);
+CREATE INDEX IF NOT EXISTS idx_interaction_signals_user_time ON interaction_signals(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_interaction_signals_recipe ON interaction_signals(recipe_id);
 
 -- Insert default user (for development/demo)
 INSERT INTO users (id, name, dietary_restrictions, allergies, cuisine_preferences, goals, cooking_skill, household_size, max_cooking_time)

@@ -9,6 +9,12 @@ import {
   isNearDuplicateByIngredients,
 } from '../recipes/library';
 import { rankCandidates, shouldReuse } from '../recipes/scoring';
+import {
+  createWeeklyContext,
+  updateWeeklyContext,
+  applyWeeklyOptimization,
+  type WeeklyContext,
+} from '../recipes/weeklyOptimizer';
 
 const router = Router();
 
@@ -119,9 +125,10 @@ async function getRecipeForSlot(params: {
   mealType: string;
   maxTimeMinutes: number;
   servings: number;
-  usedRecipeIds: Set<string>;
+  weeklyContext: WeeklyContext;
+  slotIndex: number;
 }): Promise<any> {
-  const { req, inventory, user, mealType, maxTimeMinutes, servings, usedRecipeIds } = params;
+  const { req, inventory, user, mealType, maxTimeMinutes, servings, weeklyContext, slotIndex } = params;
 
   const candidates = await fetchLibraryCandidates({
     mealType,
@@ -138,24 +145,29 @@ async function getRecipeForSlot(params: {
     mustIncludeIngredient: '',
   });
 
-  const reusable = ranked.filter((c) => shouldReuse(c));
-  const reusableUnused = reusable.find((c) => !usedRecipeIds.has(c.recipe.id));
-  const chosenReusable = reusableUnused ?? reusable[0];
+  // Apply weekly optimization (variety, effort balance, ingredient reuse)
+  const optimized = applyWeeklyOptimization(ranked, weeklyContext, slotIndex);
+
+  const reusable = optimized.filter((c) => shouldReuse(c) && !weeklyContext.usedRecipeIds.has(c.recipe.id));
+  const chosenReusable = reusable[0]; // Best candidate after weekly optimization
 
   if (chosenReusable) {
     const top = chosenReusable;
     incrementUsage(top.recipe.id).catch(() => undefined);
     const mapped = mapLibraryRowToRecipe(top.recipe, servings);
     mapped.matchScore = Math.round(top.inventoryCoverage * 100);
-    usedRecipeIds.add(top.recipe.id);
+    
+    // Update weekly context with selected recipe
+    updateWeeklyContext(weeklyContext, top.recipe);
 
     req.log.info(
       {
         action: 'weekly_meal_plan_slot',
         mealType,
         mode: 'reuse',
-        rotated: reusableUnused ? true : false,
+        slotIndex,
         recipeId: top.recipe.id,
+        varietyAdjusted: true,
       },
       'Selected recipe for slot'
     );
@@ -234,7 +246,15 @@ Return ONLY a valid JSON object with:
   }
 
   const finalId = String(recipe.id || randomId());
-  usedRecipeIds.add(finalId);
+  
+  // Update weekly context with generated recipe
+  updateWeeklyContext(weeklyContext, {
+    id: finalId,
+    ingredients: recipe.ingredients || [],
+    prep_time: recipe.prepTime,
+    cook_time: recipe.cookTime,
+    cuisine: null, // Generated recipes don't have cuisine extracted yet
+  });
 
   return { ...recipe, id: finalId };
 }
@@ -340,6 +360,32 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
       mustIncludeIngredient,
     });
 
+    // Enhanced telemetry: score distribution
+    if (ranked.length > 0) {
+      const scores = ranked.map((c) => c.compositeScore);
+      const topCandidate = ranked[0];
+      req.log.info(
+        {
+          action: 'recipe_ranking_telemetry',
+          candidateCount: ranked.length,
+          scoreDistribution: {
+            min: Math.min(...scores).toFixed(3),
+            max: Math.max(...scores).toFixed(3),
+            median: scores[Math.floor(scores.length / 2)]?.toFixed(3),
+          },
+          topCandidate: {
+            id: topCandidate.recipe.id,
+            compositeScore: topCandidate.compositeScore.toFixed(3),
+            inventoryCoverage: topCandidate.inventoryCoverage.toFixed(3),
+            preferenceScore: topCandidate.preferenceScore.toFixed(3),
+            qualityScore: topCandidate.qualityScore.toFixed(3),
+            missingCount: topCandidate.missingCount,
+          },
+        },
+        'Recipe ranking completed'
+      );
+    }
+
     if (shouldReuse(ranked[0])) {
       const top3 = ranked.slice(0, 3).map((c) => c.recipe);
 
@@ -347,6 +393,16 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
       for (const r of top3) {
         incrementUsage(r.id).catch(() => undefined);
       }
+
+      req.log.info(
+        {
+          action: 'recipes_from_inventory',
+          mode: 'reuse',
+          selectedCount: top3.length,
+          recipeIds: top3.map((r: any) => r.id),
+        },
+        'Reusing recipes from library'
+      );
 
       const mapped = top3.map((row: any) => ({
         id: row.id,
@@ -369,11 +425,23 @@ router.post('/recipes-from-inventory', async (req: any, res: Response) => {
       return res.json(mapped);
     }
 
+    // Gate failure telemetry
+    const gateFailureReason = ranked.length === 0
+      ? 'no_candidates'
+      : ranked[0].compositeScore < 0.78
+        ? 'score_below_threshold'
+        : ranked[0].missingCount > 3
+          ? 'too_many_missing_ingredients'
+          : 'unknown';
+
     req.log.info(
       {
         action: 'recipes_from_inventory',
         mode: 'generate',
-        reason: ranked.length === 0 ? 'no_candidates' : 'gate_failed',
+        reason: gateFailureReason,
+        candidateCount: ranked.length,
+        topScore: ranked[0]?.compositeScore?.toFixed(3) ?? null,
+        topMissingCount: ranked[0]?.missingCount ?? null,
       },
       'Generating recipes from inventory'
     );
@@ -485,9 +553,9 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
     const week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const days: any[] = [];
 
-    // Per-slot gate: reuse library recipes when good enough; generate only when needed.
-    // Also avoid repeats across the week by tracking used recipe ids.
-    const usedRecipeIds = new Set<string>();
+    // Weekly context for variety optimization, effort balancing, ingredient reuse
+    const weeklyContext = createWeeklyContext(35); // Target 35 min avg effort per slot
+    let slotIndex = 0;
 
     for (const dayName of week) {
       const breakfast = await getRecipeForSlot({
@@ -497,7 +565,8 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
         mealType: 'breakfast',
         maxTimeMinutes,
         servings,
-        usedRecipeIds,
+        weeklyContext,
+        slotIndex: slotIndex++,
       });
 
       const lunch = await getRecipeForSlot({
@@ -507,7 +576,8 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
         mealType: 'lunch',
         maxTimeMinutes,
         servings,
-        usedRecipeIds,
+        weeklyContext,
+        slotIndex: slotIndex++,
       });
 
       const dinner = await getRecipeForSlot({
@@ -517,7 +587,8 @@ router.post('/weekly-meal-plan', async (req: any, res: Response) => {
         mealType: 'dinner',
         maxTimeMinutes,
         servings,
-        usedRecipeIds,
+        weeklyContext,
+        slotIndex: slotIndex++,
       });
 
       days.push({

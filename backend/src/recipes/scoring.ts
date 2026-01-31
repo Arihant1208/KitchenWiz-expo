@@ -1,4 +1,14 @@
 import { normalizeIngredientName } from './normalize';
+import {
+  cosineSimilarity,
+  getUserTasteProfile,
+  getRecipeEmbedding,
+  generateRecipeEmbedding,
+  upsertRecipeEmbedding,
+  computeNoveltyScore,
+  zeroEmbedding,
+  type TasteEmbedding,
+} from './taste';
 
 export type InventoryItemLike = { name: string; quantity?: string };
 
@@ -47,8 +57,30 @@ export type RankedCandidate = {
   missingCount: number;
   preferenceScore: number;
   qualityScore: number;
+  tasteSimilarity: number;
+  noveltyBonus: number;
   compositeScore: number;
   missingIngredients: string[];
+};
+
+// ---------------------------------------------------------------------------
+// Configurable Ranking Weights (per spec Section 6)
+// ---------------------------------------------------------------------------
+
+export interface RankingWeights {
+  inventoryCoverage: number;
+  explicitPreference: number;
+  quality: number;
+  tasteSimilarity: number;
+  novelty: number;
+}
+
+export const DEFAULT_WEIGHTS: RankingWeights = {
+  inventoryCoverage: 0.40,
+  explicitPreference: 0.15,
+  quality: 0.20,
+  tasteSimilarity: 0.15,
+  novelty: 0.10,
 };
 
 function safeArray<T>(x: any): T[] {
@@ -145,19 +177,117 @@ export function computePreferenceScore(
   return denom === 0 ? 0.5 : clamp01(score / denom);
 }
 
+// ---------------------------------------------------------------------------
+// Taste Similarity (async – fetches embeddings)
+// ---------------------------------------------------------------------------
+
+export async function computeTasteSimilarity(
+  userId: string | undefined,
+  recipe: LibraryRecipeRow
+): Promise<number> {
+  if (!userId) return 0.5; // No user context → neutral
+
+  try {
+    const userProfile = await getUserTasteProfile(userId);
+    if (!userProfile || userProfile.interactionCount < 3) {
+      // Not enough data to personalize
+      return 0.5;
+    }
+
+    let recipeEmb = await getRecipeEmbedding(recipe.id);
+    if (!recipeEmb) {
+      // Compute and cache
+      recipeEmb = generateRecipeEmbedding({
+        title: recipe.title,
+        description: recipe.description ?? undefined,
+        cuisine: recipe.cuisine,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        prepTime: recipe.prep_time,
+        cookTime: recipe.cook_time,
+      });
+      await upsertRecipeEmbedding(recipe.id, recipeEmb);
+    }
+
+    const similarity = cosineSimilarity(userProfile.embedding, recipeEmb);
+    // Map from [-1, 1] to [0, 1]
+    return clamp01((similarity + 1) / 2);
+  } catch {
+    return 0.5;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Async Ranking (with taste + novelty)
+// ---------------------------------------------------------------------------
+
+export async function rankCandidatesAsync(
+  candidates: LibraryRecipeRow[],
+  inventory: InventoryItemLike[],
+  user: UserLike & { id?: string },
+  prefs: RecipePrefsLike,
+  weights: RankingWeights = DEFAULT_WEIGHTS
+): Promise<RankedCandidate[]> {
+  const ranked = await Promise.all(
+    (candidates || []).map(async (row) => {
+      const { coverage, missing } = computeInventoryCoverage(row.ingredient_names || [], inventory);
+      const quality = computeQualityScore(row);
+      const preference = computePreferenceScore(row, user, prefs);
+      const tasteSim = await computeTasteSimilarity(user?.id, row);
+      const novelty = user?.id ? await computeNoveltyScore(user.id, row.id) : 0.5;
+
+      const composite = clamp01(
+        coverage * weights.inventoryCoverage +
+        preference * weights.explicitPreference +
+        quality * weights.quality +
+        tasteSim * weights.tasteSimilarity +
+        novelty * weights.novelty
+      );
+
+      return {
+        recipe: row,
+        inventoryCoverage: coverage,
+        missingCount: missing.length,
+        preferenceScore: preference,
+        qualityScore: quality,
+        tasteSimilarity: tasteSim,
+        noveltyBonus: novelty,
+        compositeScore: composite,
+        missingIngredients: missing,
+      };
+    })
+  );
+
+  return ranked.sort((a, b) => b.compositeScore - a.compositeScore);
+}
+
+// ---------------------------------------------------------------------------
+// Sync Ranking (legacy, without taste/novelty – for backward compat)
+// ---------------------------------------------------------------------------
+
 export function rankCandidates(
   candidates: LibraryRecipeRow[],
   inventory: InventoryItemLike[],
   user: UserLike,
-  prefs: RecipePrefsLike
+  prefs: RecipePrefsLike,
+  weights: RankingWeights = DEFAULT_WEIGHTS
 ): RankedCandidate[] {
   return (candidates || []).map((row) => {
     const { coverage, missing } = computeInventoryCoverage(row.ingredient_names || [], inventory);
     const quality = computeQualityScore(row);
     const preference = computePreferenceScore(row, user, prefs);
 
-    // Composite weights chosen to prioritize inventory use.
-    const composite = clamp01(coverage * 0.55 + quality * 0.25 + preference * 0.20);
+    // Sync version: no taste/novelty (use neutral 0.5)
+    const tasteSim = 0.5;
+    const novelty = 0.5;
+
+    const composite = clamp01(
+      coverage * weights.inventoryCoverage +
+      preference * weights.explicitPreference +
+      quality * weights.quality +
+      tasteSim * weights.tasteSimilarity +
+      novelty * weights.novelty
+    );
 
     return {
       recipe: row,
@@ -165,6 +295,8 @@ export function rankCandidates(
       missingCount: missing.length,
       preferenceScore: preference,
       qualityScore: quality,
+      tasteSimilarity: tasteSim,
+      noveltyBonus: novelty,
       compositeScore: composite,
       missingIngredients: missing,
     };
