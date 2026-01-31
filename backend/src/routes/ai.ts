@@ -10,7 +10,6 @@ import { DAILY_AI_REQUEST_LIMIT } from '../constants';
 import { randomId } from '../helpers';
 import {
   generateJson,
-  generateText,
   chat as aiChat,
   checkAndIncrementQuota,
   generateRecipesFromInventory,
